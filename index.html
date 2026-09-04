@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>3D 物件 AR 空間投影工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OBJLoader & MTLLoader -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/MTLLoader.js"></script>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #video-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+    .simulated-bg {
+      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="relative select-none">
+
+  <!-- Real Camera Feed Video Tag -->
+  <video id="video-background" autoplay playsinline muted class="hidden"></video>
+  
+  <!-- Fallback Background container -->
+  <div id="fallback-bg" class="simulated-bg"></div>
+
+  <!-- Three.js Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- UI Controls Overlay -->
+  <div class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4">
+
+    <!-- Top Toolbar -->
+    <div class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-slate-700/50 shadow-xl text-white">
+      <div class="flex items-center space-x-2">
+        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        <span class="font-bold text-sm sm:text-base">3D AR 空間錨點投影</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="ar-btn" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-semibold shadow-md border border-blue-400/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span>啟動原生 WebXR AR</span>
+        </button>
+
+        <button id="gyro-btn" class="bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          <span>陀螺儀追蹤</span>
+        </button>
+
+        <label for="obj-input" class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium shadow-md">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span>載入 .OBJ</span>
+        </label>
+        <input type="file" id="obj-input" accept=".obj" class="hidden" />
+
+        <label for="mtl-input" class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium">
+          <span>.MTL</span>
+        </label>
+        <input type="file" id="mtl-input" accept=".mtl" class="hidden" />
+      </div>
+    </div>
+
+    <!-- Status Toast Notification -->
+    <div id="status-toast" class="self-center bg-slate-800/90 text-slate-200 text-xs sm:text-sm px-4 py-2 rounded-full border border-slate-600 shadow-lg backdrop-blur-sm transition-opacity duration-300 pointer-events-auto">
+      已固定 3D 物件於空間座標原點。在畫面上記拖曳可轉動相機視角觀察。
+    </div>
+
+    <!-- Bottom Controls Deck -->
+    <div class="pointer-events-auto bg-slate-900/85 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 shadow-2xl text-white space-y-3 max-w-md w-full self-center">
+      
+      <!-- Size Scale Slider -->
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label for="scale-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+            調整物件尺寸 (Scale)
+          </label>
+          <span id="scale-value" class="text-xs font-mono text-blue-400">1.0x</span>
+        </div>
+        <input type="range" id="scale-slider" min="0.1" max="5" step="0.05" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+      </div>
+
+      <!-- Y Rotation Slider -->
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label for="rotate-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            自轉角度 (Rotation Y)
+          </label>
+          <span id="rotate-value" class="text-xs font-mono text-emerald-400">0°</span>
+        </div>
+        <input type="range" id="rotate-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex justify-between items-center pt-1 border-t border-slate-700/60">
+        <button id="reset-cam-btn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-600 transition">
+          重置視角鏡頭
+        </button>
+        <span class="text-[10px] text-slate-400">單指滑動：環繞視角 ｜ 雙指：鏡頭拉近拉遠</span>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let scene, camera, renderer;
+    let targetObjectPivot = null;
+    let loadedMeshGroup = null;
+    let groundGrid = null;
+    let mtlMaterials = null;
+
+    // Orbit Camera Controls variables (Camera orbits around world origin)
+    let isPointerDown = false;
+    let previousPointerPosition = { x: 0, y: 0 };
+    let cameraAngleX = 0; // Pitch
+    let cameraAngleY = 0; // Yaw
+    let cameraDistance = 3.5; // Distance from target
+
+    // Pinch zoom variables
+    let initialPinchDistance = null;
+
+    // Gyroscope tracking variables
+    let gyroEnabled = false;
+    const zee = new THREE.Vector3(0, 0, 1);
+    const euler = new THREE.Euler();
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+
+    // UI Elements
+    const video = document.getElementById('video-background');
+    const fallbackBg = document.getElementById('fallback-bg');
+    const container = document.getElementById('canvas-container');
+    const objInput = document.getElementById('obj-input');
+    const mtlInput = document.getElementById('mtl-input');
+    const scaleSlider = document.getElementById('scale-slider');
+    const scaleValue = document.getElementById('scale-value');
+    const rotateSlider = document.getElementById('rotate-slider');
+    const rotateValue = document.getElementById('rotate-value');
+    const statusToast = document.getElementById('status-toast');
+    const resetCamBtn = document.getElementById('reset-cam-btn');
+    const gyroBtn = document.getElementById('gyro-btn');
+    const arBtn = document.getElementById('ar-btn');
+
+    async function initCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        useFallbackEnvironment("瀏覽器未開放相機存取，使用 3D 虛擬實境空間。");
+        return;
+      }
+      try {
+        const constraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        fallbackBg.classList.add('hidden');
+        showToast("相機已啟動。物件已固定於 3D 空間原點！");
+      } catch (err) {
+        useFallbackEnvironment("Preview 沙盒環境未開放鏡頭權限，已切換至 3D 模擬空間模式。");
+      }
+    }
+
+    function useFallbackEnvironment(msg) {
+      video.classList.add('hidden');
+      fallbackBg.classList.remove('hidden');
+      showToast(msg);
+    }
+
+    function initThree() {
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      updateCameraPosition();
+
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.xr.enabled = true; // Enable WebXR capabilities
+      container.appendChild(renderer.domElement);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(5, 12, 7);
+      scene.add(dirLight);
+
+      // Create Spatial Ground Grid Anchor Reference
+      groundGrid = new THREE.GridHelper(10, 20, 0x3b82f6, 0x475569);
+      groundGrid.position.set(0, -0.5, 0);
+      scene.add(groundGrid);
+
+      // Pivot Object for holding models centered at World Origin (0,0,0)
+      targetObjectPivot = new THREE.Group();
+      targetObjectPivot.position.set(0, 0, 0);
+      scene.add(targetObjectPivot);
+
+      createDefaultCube();
+
+      // Window Events
+      window.addEventListener('resize', onWindowResize);
+
+      // Touch & Mouse Orbit Controls
+      container.addEventListener('pointerdown', onPointerDown);
+      container.addEventListener('pointermove', onPointerMove);
+      container.addEventListener('pointerup', onPointerUp);
+      container.addEventListener('wheel', onWheelZoom);
+
+      // WebXR AR Availability Check
+      checkWebXR();
+
+      renderer.setAnimationLoop(renderLoop);
+    }
+
+    function checkWebXR() {
+      if ('xr' in navigator) {
+        navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+          if (!supported) {
+            arBtn.classList.add('opacity-50');
+            arBtn.title = "當前裝置或瀏覽器不支援 WebXR AR 模式";
+          }
+        });
+      }
+    }
+
+    // WebXR AR Session trigger
+    arBtn.addEventListener('click', async () => {
+      if (!('xr' in navigator)) {
+        showToast("此瀏覽器不支援 WebXR 原生 AR 模式，請使用 Android Chrome 試用。", true);
+        return;
+      }
+      try {
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (supported) {
+          const session = await navigator.xr.requestSession('immersive-ar', {
+            requiredFeatures: ['hit-test']
+          });
+          renderer.xr.setSession(session);
+          showToast("已進入原生地面追蹤 WebXR AR 模式！");
+        } else {
+          showToast("裝置不支援 AR 模式", true);
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("啟動 WebXR AR 失敗: " + err.message, true);
+      }
+    });
+
+    function updateCameraPosition() {
+      // Calculate camera orbit position on a sphere around (0,0,0)
+      const x = cameraDistance * Math.sin(cameraAngleY) * Math.cos(cameraAngleX);
+      const y = cameraDistance * Math.sin(cameraAngleX);
+      const z = cameraDistance * Math.cos(cameraAngleY) * Math.cos(cameraAngleX);
+
+      camera.position.set(x, y, z);
+      camera.lookAt(0, 0, 0);
+    }
+
+    function createDefaultCube() {
+      const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x3b82f6,
+        roughness: 0.3,
+        metalness: 0.2
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      const wireGeo = new THREE.BoxGeometry(0.84, 0.84, 0.84);
+      const wireMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, wireframe: true });
+      const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+      
+      const group = new THREE.Group();
+      group.add(mesh);
+      group.add(wireMesh);
+
+      setModel(group);
+    }
+
+    function setModel(modelGroup) {
+      if (loadedMeshGroup) {
+        targetObjectPivot.remove(loadedMeshGroup);
+      }
+
+      loadedMeshGroup = modelGroup;
+
+      // Center geometry at origin
+      const box = new THREE.Box3().setFromObject(loadedMeshGroup);
+      const center = box.getCenter(new THREE.Vector3());
+      loadedMeshGroup.position.sub(center);
+
+      targetObjectPivot.add(loadedMeshGroup);
+
+      updateModelScale();
+      updateModelRotation();
+    }
+
+    // Pointer Event Handlers for Orbiting Camera
+    function onPointerDown(event) {
+      if (event.clientY < 60 || event.clientY > window.innerHeight - 150) return;
+      isPointerDown = true;
+      previousPointerPosition = { x: event.clientX, y: event.clientY };
+    }
+
+    function onPointerMove(event) {
+      if (!isPointerDown) return;
+
+      const deltaX = event.clientX - previousPointerPosition.x;
+      const deltaY = event.clientY - previousPointerPosition.y;
+
+      cameraAngleY -= deltaX * 0.008;
+      cameraAngleX += deltaY * 0.008;
+
+      // Clamp vertical camera pitch angle
+      cameraAngleX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleX));
+
+      updateCameraPosition();
+      previousPointerPosition = { x: event.clientX, y: event.clientY };
+    }
+
+    function onPointerUp() {
+      isPointerDown = false;
+    }
+
+    function onWheelZoom(event) {
+      cameraDistance += event.deltaY * 0.003;
+      cameraDistance = Math.max(0.5, Math.min(15, cameraDistance));
+      updateCameraPosition();
+    }
+
+    // Gyroscope Camera Control
+    function enableGyroscope() {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              window.addEventListener('deviceorientation', onDeviceOrientation, true);
+              gyroEnabled = true;
+              gyroBtn.classList.replace('bg-slate-700', 'bg-emerald-600');
+              showToast("陀螺儀動態跟隨已啟動！");
+            } else {
+              showToast("未獲得陀螺儀權限。", true);
+            }
+          })
+          .catch(() => showToast("無法啟用陀螺儀功能", true));
+      } else if ('DeviceOrientationEvent' in window) {
+        window.addEventListener('deviceorientation', onDeviceOrientation, true);
+        gyroEnabled = true;
+        gyroBtn.classList.replace('bg-slate-700', 'bg-emerald-600');
+        showToast("陀螺儀動態跟隨已啟動！");
+      } else {
+        showToast("裝置不支援陀螺儀感測器。", true);
+      }
+    }
+
+    function onDeviceOrientation(event) {
+      if (!gyroEnabled || event.alpha === null) return;
+
+      const alpha = THREE.MathUtils.degToRad(event.alpha || 0);
+      const beta = THREE.MathUtils.degToRad(event.beta || 0);
+      const gamma = THREE.MathUtils.degToRad(event.gamma || 0);
+      const orient = THREE.MathUtils.degToRad(window.orientation || 0);
+
+      euler.set(beta, alpha, -gamma, 'YXZ');
+      camera.quaternion.setFromEuler(euler);
+      camera.quaternion.multiply(q1);
+      camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+    }
+
+    function updateModelScale() {
+      if (!targetObjectPivot) return;
+      const val = parseFloat(scaleSlider.value);
+      targetObjectPivot.scale.set(val, val, val);
+      scaleValue.textContent = `${val.toFixed(2)}x`;
+    }
+
+    function updateModelRotation() {
+      if (!targetObjectPivot) return;
+      const deg = parseFloat(rotateSlider.value);
+      targetObjectPivot.rotation.y = THREE.MathUtils.degToRad(deg);
+      rotateValue.textContent = `${deg}°`;
+    }
+
+    scaleSlider.addEventListener('input', updateModelScale);
+    rotateSlider.addEventListener('input', updateModelRotation);
+    gyroBtn.addEventListener('click', enableGyroscope);
+
+    resetCamBtn.addEventListener('click', () => {
+      cameraAngleX = 0.2;
+      cameraAngleY = 0;
+      cameraDistance = 3.5;
+      updateCameraPosition();
+      showToast("已重置視角鏡頭至中央點");
+    });
+
+    // File Upload: MTL Material Loader
+    mtlInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        if (!THREE.MTLLoader) return;
+        const mtlLoader = new THREE.MTLLoader();
+        mtlMaterials = mtlLoader.parse(event.target.result);
+        mtlMaterials.preload();
+        showToast(`材質檔 .MTL (${file.name}) 載入成功，請選擇 .OBJ 模型檔`);
+      };
+      reader.readAsText(file);
+    });
+
+    // File Upload: OBJ Model Loader
+    objInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      showToast("正在解析 3D 模型...", false);
+
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        try {
+          if (!THREE.OBJLoader) return;
+          const objLoader = new THREE.OBJLoader();
+          
+          if (mtlMaterials) {
+            objLoader.setMaterials(mtlMaterials);
+          }
+
+          const loadedObj = objLoader.parse(event.target.result);
+
+          loadedObj.traverse((child) => {
+            if (child.isMesh && !child.material) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: 0x94a3b8,
+                roughness: 0.5,
+                metalness: 0.1
+              });
+            }
+          });
+
+          const box = new THREE.Box3().setFromObject(loadedObj);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          
+          if (maxDim > 0) {
+            const autoScale = 1.0 / maxDim;
+            loadedObj.scale.set(autoScale, autoScale, autoScale);
+          }
+
+          setModel(loadedObj);
+          showToast(`模型載入成功：${file.name}`);
+        } catch (err) {
+          console.error("解析 OBJ 檔案失敗:", err);
+          showToast("OBJ 檔案格式錯誤或無法解析", true);
+        }
+      };
+
+      reader.readAsText(file);
+    });
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function renderLoop() {
+      // Idle rotation if default model
+      if (targetObjectPivot && (!objInput.files || !objInput.files.length) && !isPointerDown) {
+        targetObjectPivot.rotation.y += 0.005;
+        const deg = Math.round(THREE.MathUtils.radToDeg(targetObjectPivot.rotation.y) % 360);
+        rotateSlider.value = deg < 0 ? deg + 360 : deg;
+        rotateValue.textContent = `${rotateSlider.value}°`;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    let toastTimeout;
+    function showToast(message, isError = false) {
+      statusToast.textContent = message;
+      statusToast.className = `self-center text-xs sm:text-sm px-4 py-2 rounded-full border shadow-lg backdrop-blur-sm transition-opacity duration-300 pointer-events-auto ${
+        isError ? 'bg-red-900/90 text-red-200 border-red-700' : 'bg-slate-800/90 text-slate-200 border-slate-600'
+      }`;
+      
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        statusToast.style.opacity = '0.7';
+      }, 4000);
+      statusToast.style.opacity = '1';
+    }
+
+    window.onload = () => {
+      initThree();
+      initCamera();
+    };
+  </script>
+</body>
+</html>
