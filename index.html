@@ -83,10 +83,10 @@
   <div id="ar-marker" class="ar-reticle-marker hidden"></div>
 
   <!-- UI Controls Overlay -->
-  <div class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 pb-8">
+  <div id="ui-overlay" class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 pb-8 transition-opacity duration-300">
 
     <!-- Top Toolbar -->
-    <div class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-slate-700/50 shadow-xl text-white">
+    <div id="top-toolbar" class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-slate-700/50 shadow-xl text-white">
       <div class="flex items-center space-x-2">
         <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -94,7 +94,7 @@
         <span class="font-bold text-sm sm:text-base">3D AR 實境定位投影</span>
       </div>
 
-      <!-- Upload Actions -->
+      <!-- Upload & Toggle Actions -->
       <div class="flex flex-wrap items-center gap-2">
         <button id="gyro-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium shadow-md">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -116,6 +116,12 @@
           <span>貼圖 (可選)</span>
         </label>
         <input type="file" id="texture-input" accept="image/*" class="hidden" />
+
+        <!-- Hide UI Button inside Toolbar -->
+        <button id="hide-ui-btn" class="bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-600 text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium shadow-md">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.03 10.03 0 013.682-.813c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m-1.776 1.776l-9.9-9.9"/></svg>
+          <span>隱藏介面</span>
+        </button>
       </div>
     </div>
 
@@ -125,7 +131,7 @@
     </div>
 
     <!-- Bottom Controls Deck -->
-    <div class="pointer-events-auto bg-slate-900/85 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 shadow-2xl text-white space-y-3 max-w-md w-full self-center">
+    <div id="bottom-deck" class="pointer-events-auto bg-slate-900/85 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 shadow-2xl text-white space-y-3 max-w-md w-full self-center max-h-[45vh] overflow-y-auto">
       
       <!-- Size Scale Slider -->
       <div>
@@ -151,16 +157,40 @@
         <input type="range" id="height-slider" min="-3" max="0" step="0.1" value="-1.2" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
       </div>
 
+      <!-- X Rotation Slider -->
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label for="rotate-x-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
+            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+            旋轉 X 軸 (前後傾斜)
+          </label>
+          <span id="rotate-x-value" class="text-xs font-mono text-rose-400">0°</span>
+        </div>
+        <input type="range" id="rotate-x-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-rose-500" />
+      </div>
+
       <!-- Y Rotation Slider -->
       <div>
         <div class="flex justify-between items-center mb-1">
           <label for="rotate-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            旋轉角度 (Rotation Y)
+            旋轉 Y 軸 (左右自轉)
           </label>
           <span id="rotate-value" class="text-xs font-mono text-emerald-400">0°</span>
         </div>
         <input type="range" id="rotate-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+      </div>
+
+      <!-- Z Rotation Slider -->
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label for="rotate-z-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            旋轉 Z 軸 (左右滾動)
+          </label>
+          <span id="rotate-z-value" class="text-xs font-mono text-amber-400">0°</span>
+        </div>
+        <input type="range" id="rotate-z-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
       </div>
 
       <!-- Action Buttons -->
@@ -173,6 +203,12 @@
 
     </div>
   </div>
+
+  <!-- Floating Show UI Restore Button (Only visible when UI is hidden) -->
+  <button id="show-ui-btn" class="hidden absolute top-4 right-4 z-20 bg-slate-900/90 hover:bg-slate-800 text-amber-400 px-3.5 py-2 rounded-2xl border border-slate-700/80 shadow-2xl backdrop-blur-md transition flex items-center space-x-1.5 text-xs sm:text-sm font-semibold pointer-events-auto">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+    <span>顯示介面</span>
+  </button>
 
   <script>
     let scene, camera, renderer;
@@ -215,11 +251,35 @@
     const scaleValue = document.getElementById('scale-value');
     const heightSlider = document.getElementById('height-slider');
     const heightValue = document.getElementById('height-value');
+    const rotateXSlider = document.getElementById('rotate-x-slider');
+    const rotateXValue = document.getElementById('rotate-x-value');
     const rotateSlider = document.getElementById('rotate-slider');
     const rotateValue = document.getElementById('rotate-value');
+    const rotateZSlider = document.getElementById('rotate-z-slider');
+    const rotateZValue = document.getElementById('rotate-z-value');
     const statusToast = document.getElementById('status-toast');
     const resetAnchorBtn = document.getElementById('reset-anchor-btn');
     const gyroBtn = document.getElementById('gyro-btn');
+    
+    const uiOverlay = document.getElementById('ui-overlay');
+    const hideUiBtn = document.getElementById('hide-ui-btn');
+    const showUiBtn = document.getElementById('show-ui-btn');
+
+    // UI Toggle Visibility Handler
+    let isUiVisible = true;
+    function toggleUiVisibility(show) {
+      isUiVisible = show;
+      if (isUiVisible) {
+        uiOverlay.classList.remove('opacity-0', 'pointer-events-none');
+        showUiBtn.classList.add('hidden');
+      } else {
+        uiOverlay.classList.add('opacity-0', 'pointer-events-none');
+        showUiBtn.classList.remove('hidden');
+      }
+    }
+
+    hideUiBtn.addEventListener('click', () => toggleUiVisibility(false));
+    showUiBtn.addEventListener('click', () => toggleUiVisibility(true));
 
     // Camera Feed Init tailored for iOS Safari / Mobile
     async function initCamera() {
@@ -355,7 +415,8 @@
 
     // Handle Screen Tap to set 3D Ground Anchor Point
     function onPointerDown(event) {
-      if (event.clientY < 60 || event.clientY > window.innerHeight - 170) return;
+      // Don't register taps on controls UI if UI is visible
+      if (isUiVisible && (event.clientY < 60 || event.clientY > window.innerHeight - 170)) return;
 
       isDraggingView = true;
       previousPointerPosition = { x: event.clientX, y: event.clientY };
@@ -466,13 +527,23 @@
 
     function updateModelRotation() {
       if (!targetObjectPivot) return;
-      const deg = parseFloat(rotateSlider.value);
-      targetObjectPivot.rotation.y = THREE.MathUtils.degToRad(deg);
-      rotateValue.textContent = `${deg}°`;
+      const degX = parseFloat(rotateXSlider.value);
+      const degY = parseFloat(rotateSlider.value);
+      const degZ = parseFloat(rotateZSlider.value);
+
+      targetObjectPivot.rotation.x = THREE.MathUtils.degToRad(degX);
+      targetObjectPivot.rotation.y = THREE.MathUtils.degToRad(degY);
+      targetObjectPivot.rotation.z = THREE.MathUtils.degToRad(degZ);
+
+      rotateXValue.textContent = `${degX}°`;
+      rotateValue.textContent = `${degY}°`;
+      rotateZValue.textContent = `${degZ}°`;
     }
 
     scaleSlider.addEventListener('input', updateModelScale);
+    rotateXSlider.addEventListener('input', updateModelRotation);
     rotateSlider.addEventListener('input', updateModelRotation);
+    rotateZSlider.addEventListener('input', updateModelRotation);
 
     heightSlider.addEventListener('input', () => {
       floorY = parseFloat(heightSlider.value);
