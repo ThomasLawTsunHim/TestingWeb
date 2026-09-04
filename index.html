@@ -49,11 +49,28 @@
       z-index: 2;
       touch-action: none;
     }
+    /* Dynamic AR Ring Marker */
+    .ar-reticle-marker {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border: 3px solid #38bdf8;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 3;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
+      animation: arPulse 1.2s ease-out infinite;
+    }
+    @keyframes arPulse {
+      0% { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+    }
   </style>
 </head>
 <body class="relative select-none">
 
-  <!-- Real Camera Feed Video Tag (iOS Safari safe) -->
+  <!-- Camera Feed Video Tag -->
   <video id="video-background" autoplay playsinline webkit-playsinline muted class="hidden"></video>
   
   <!-- Fallback Background container -->
@@ -61,6 +78,9 @@
 
   <!-- Three.js Canvas Container -->
   <div id="canvas-container"></div>
+
+  <!-- Screen Tap Placement Reticle Overlay -->
+  <div id="ar-marker" class="ar-reticle-marker hidden"></div>
 
   <!-- UI Controls Overlay -->
   <div class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 pb-8">
@@ -71,7 +91,7 @@
         <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
-        <span class="font-bold text-sm sm:text-base">3D OBJ/MTL 空間投影</span>
+        <span class="font-bold text-sm sm:text-base">3D AR 實境定位投影</span>
       </div>
 
       <!-- Upload Actions -->
@@ -101,7 +121,7 @@
 
     <!-- Status Toast Notification -->
     <div id="status-toast" class="self-center bg-slate-800/90 text-slate-200 text-xs sm:text-sm px-4 py-2 rounded-full border border-slate-600 shadow-lg backdrop-blur-sm transition-opacity duration-300 pointer-events-auto text-center max-w-xs sm:max-w-md">
-      已成功啟動。請載入 .OBJ 檔案及選配的 .MTL 材質進行投影。
+      📍 點擊畫面任意位置即可將物件固定於現實空間錨點。
     </div>
 
     <!-- Bottom Controls Deck -->
@@ -112,11 +132,23 @@
         <div class="flex justify-between items-center mb-1">
           <label for="scale-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
             <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-            縮放尺寸 (Scale)
+            物件尺寸 (Scale)
           </label>
           <span id="scale-value" class="text-xs font-mono text-blue-400">1.0x</span>
         </div>
         <input type="range" id="scale-slider" min="0.1" max="5" step="0.05" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+      </div>
+
+      <!-- Ground Depth Distance Slider -->
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label for="height-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7"/></svg>
+            地面高度 (Floor Height)
+          </label>
+          <span id="height-value" class="text-xs font-mono text-purple-400">-1.2 米</span>
+        </div>
+        <input type="range" id="height-slider" min="-3" max="0" step="0.1" value="-1.2" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
       </div>
 
       <!-- Y Rotation Slider -->
@@ -124,7 +156,7 @@
         <div class="flex justify-between items-center mb-1">
           <label for="rotate-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            自轉角度 (Rotation Y)
+            旋轉角度 (Rotation Y)
           </label>
           <span id="rotate-value" class="text-xs font-mono text-emerald-400">0°</span>
         </div>
@@ -133,10 +165,10 @@
 
       <!-- Action Buttons -->
       <div class="flex justify-between items-center pt-1 border-t border-slate-700/60">
-        <button id="reset-cam-btn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-600 transition">
-          重置視角鏡頭
+        <button id="reset-anchor-btn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-600 transition">
+          重置至正前方地面
         </button>
-        <span class="text-[10px] text-slate-400">滑動螢幕：轉動視角 ｜ 滾輪：近遠</span>
+        <span class="text-[10px] text-slate-400">點擊螢幕任意位置設定新 AR 錨點</span>
       </div>
 
     </div>
@@ -147,15 +179,22 @@
     let targetObjectPivot = null;
     let loadedMesh = null;
     let groundGrid = null;
+    let visualReticleRing = null;
     let mtlMaterials = null;
     let customTexture = null;
 
-    // Orbit Camera Controls
-    let isPointerDown = false;
+    // Spatial Anchoring
+    let floorY = -1.2;
+    let anchorWorldPosition = new THREE.Vector3(0, -1.2, -2.5);
+    const raycaster = new THREE.Raycaster();
+    const mouseVector = new THREE.Vector2();
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
+
+    // Camera Orbit/View Controls
+    let isDraggingView = false;
     let previousPointerPosition = { x: 0, y: 0 };
-    let cameraAngleX = 0.2;
-    let cameraAngleY = 0;
-    let cameraDistance = 3.5;
+    let cameraPitch = 0; // Vertical angle
+    let cameraYaw = 0;   // Horizontal angle
 
     // Gyroscope tracking variables
     let gyroEnabled = false;
@@ -168,21 +207,24 @@
     const video = document.getElementById('video-background');
     const fallbackBg = document.getElementById('fallback-bg');
     const container = document.getElementById('canvas-container');
+    const arMarker = document.getElementById('ar-marker');
     const objInput = document.getElementById('obj-input');
     const mtlInput = document.getElementById('mtl-input');
     const textureInput = document.getElementById('texture-input');
     const scaleSlider = document.getElementById('scale-slider');
     const scaleValue = document.getElementById('scale-value');
+    const heightSlider = document.getElementById('height-slider');
+    const heightValue = document.getElementById('height-value');
     const rotateSlider = document.getElementById('rotate-slider');
     const rotateValue = document.getElementById('rotate-value');
     const statusToast = document.getElementById('status-toast');
-    const resetCamBtn = document.getElementById('reset-cam-btn');
+    const resetAnchorBtn = document.getElementById('reset-anchor-btn');
     const gyroBtn = document.getElementById('gyro-btn');
 
-    // Camera Init tailored for iOS Safari
+    // Camera Feed Init tailored for iOS Safari / Mobile
     async function initCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        useFallbackEnvironment("iOS Safari 尚未開放相機存取，已啟用 3D 模擬視角。");
+        useFallbackEnvironment("iOS Safari 未開放相機權限，啟用 3D 模擬視角。");
         return;
       }
       try {
@@ -203,10 +245,10 @@
 
         video.classList.remove('hidden');
         fallbackBg.classList.add('hidden');
-        showToast("相機已於 Safari 啟用！");
+        showToast("相機已啟動！點擊畫面任意位置可設定 AR 物件錨點。");
       } catch (err) {
         console.warn("Camera init failed:", err);
-        useFallbackEnvironment("未獲相機授權或在沙盒 Preview 中，已切換至 3D 空間模擬模式。");
+        useFallbackEnvironment("未獲得鏡頭權限或在沙盒環境，已自動切換至 3D 空間模式。");
       }
     }
 
@@ -219,15 +261,16 @@
     function initThree() {
       scene = new THREE.Scene();
 
+      // Camera positioned at head level (0, 0, 0)
       camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-      updateCameraPosition();
+      camera.position.set(0, 0, 0);
 
       renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       container.appendChild(renderer.domElement);
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
       scene.add(ambientLight);
 
       const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -238,40 +281,37 @@
       backLight.position.set(-5, -5, -5);
       scene.add(backLight);
 
-      // Spatial Ground Grid Reference
-      groundGrid = new THREE.GridHelper(10, 20, 0x3b82f6, 0x475569);
-      groundGrid.position.set(0, -0.5, 0);
+      // Ground plane grid helper representing reality floor
+      groundGrid = new THREE.GridHelper(15, 30, 0x38bdf8, 0x475569);
+      groundGrid.position.set(0, floorY, 0);
       scene.add(groundGrid);
 
-      // Pivot Object centered at World Origin (0,0,0)
+      // Visual Placement Reticle Ring on 3D Ground Plane
+      const ringGeo = new THREE.RingGeometry(0.3, 0.35, 32);
+      ringGeo.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide });
+      visualReticleRing = new THREE.Mesh(ringGeo, ringMat);
+      visualReticleRing.position.copy(anchorWorldPosition);
+      scene.add(visualReticleRing);
+
+      // Pivot Group for target 3D object
       targetObjectPivot = new THREE.Group();
-      targetObjectPivot.position.set(0, 0, 0);
+      targetObjectPivot.position.copy(anchorWorldPosition);
       scene.add(targetObjectPivot);
 
       createDefaultCube();
 
-      // Events
+      // Gesture & Pointer Events
       window.addEventListener('resize', onWindowResize);
       container.addEventListener('pointerdown', onPointerDown);
       container.addEventListener('pointermove', onPointerMove);
       container.addEventListener('pointerup', onPointerUp);
-      container.addEventListener('pointercancel', onPointerUp);
-      container.addEventListener('wheel', onWheelZoom);
 
       animate();
     }
 
-    function updateCameraPosition() {
-      const x = cameraDistance * Math.sin(cameraAngleY) * Math.cos(cameraAngleX);
-      const y = cameraDistance * Math.sin(cameraAngleX);
-      const z = cameraDistance * Math.cos(cameraAngleY) * Math.cos(cameraAngleX);
-
-      camera.position.set(x, y, z);
-      camera.lookAt(0, 0, 0);
-    }
-
     function createDefaultCube() {
-      const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+      const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
       const material = new THREE.MeshStandardMaterial({
         color: 0x3b82f6,
         roughness: 0.3,
@@ -279,7 +319,7 @@
       });
       const mesh = new THREE.Mesh(geometry, material);
       
-      const wireGeo = new THREE.BoxGeometry(0.84, 0.84, 0.84);
+      const wireGeo = new THREE.BoxGeometry(0.62, 0.62, 0.62);
       const wireMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, wireframe: true });
       const wireMesh = new THREE.Mesh(wireGeo, wireMat);
       
@@ -297,10 +337,15 @@
 
       loadedMesh = meshOrGroup;
 
-      // Center geometry bounds at origin
+      // Center geometry bounds at pivot center
       const box = new THREE.Box3().setFromObject(loadedMesh);
       const center = box.getCenter(new THREE.Vector3());
       loadedMesh.position.sub(center);
+
+      // Raise slightly so bottom rests on anchor floor
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      loadedMesh.position.y += size.y / 2;
 
       targetObjectPivot.add(loadedMesh);
 
@@ -308,39 +353,69 @@
       updateModelRotation();
     }
 
-    // iOS Gesture and Drag Orbit Handling
+    // Handle Screen Tap to set 3D Ground Anchor Point
     function onPointerDown(event) {
-      if (event.clientY < 60 || event.clientY > window.innerHeight - 150) return;
-      isPointerDown = true;
+      if (event.clientY < 60 || event.clientY > window.innerHeight - 170) return;
+
+      isDraggingView = true;
       previousPointerPosition = { x: event.clientX, y: event.clientY };
+
+      // Raycast from Screen Tap into 3D World Floor Plane
+      mouseVector.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseVector.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouseVector, camera);
+      
+      // Update Ground Plane constant
+      groundPlane.constant = -floorY;
+      const hitPoint = new THREE.Vector3();
+
+      if (raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+        anchorWorldPosition.copy(hitPoint);
+        
+        // Update 3D Object & Placement Ring Location
+        targetObjectPivot.position.copy(anchorWorldPosition);
+        visualReticleRing.position.copy(anchorWorldPosition);
+
+        // UI Pulse Marker Effect
+        triggerMarkerPulse(event.clientX, event.clientY);
+        showToast(`📍 已將 AR 錨點定位至 (${hitPoint.x.toFixed(1)}, ${hitPoint.z.toFixed(1)})`);
+      }
     }
 
     function onPointerMove(event) {
-      if (!isPointerDown) return;
+      if (!isDraggingView) return;
 
-      const deltaX = event.clientX - previousPointerPosition.x;
-      const deltaY = event.clientY - previousPointerPosition.y;
+      // If Gyroscope is disabled, allow touch drag to look around spatial scene
+      if (!gyroEnabled) {
+        const deltaX = event.clientX - previousPointerPosition.x;
+        const deltaY = event.clientY - previousPointerPosition.y;
 
-      cameraAngleY -= deltaX * 0.008;
-      cameraAngleX += deltaY * 0.008;
+        cameraYaw -= deltaX * 0.005;
+        cameraPitch -= deltaY * 0.005;
+        cameraPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraPitch));
 
-      cameraAngleX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleX));
+        camera.rotation.set(cameraPitch, cameraYaw, 0, 'YXZ');
+      }
 
-      updateCameraPosition();
       previousPointerPosition = { x: event.clientX, y: event.clientY };
     }
 
     function onPointerUp() {
-      isPointerDown = false;
+      isDraggingView = false;
     }
 
-    function onWheelZoom(event) {
-      cameraDistance += event.deltaY * 0.003;
-      cameraDistance = Math.max(0.5, Math.min(15, cameraDistance));
-      updateCameraPosition();
+    function triggerMarkerPulse(x, y) {
+      arMarker.style.left = `${x}px`;
+      arMarker.style.top = `${y}px`;
+      arMarker.classList.remove('hidden');
+
+      setTimeout(() => {
+        arMarker.classList.add('hidden');
+      }, 1200);
     }
 
-    // iOS DeviceOrientation / Gyroscope setup
+    // Gyroscope tracking for iPhone / Mobile AR
     function enableGyroscope() {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
@@ -349,9 +424,9 @@
               window.addEventListener('deviceorientation', onDeviceOrientation, true);
               gyroEnabled = true;
               gyroBtn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-              showToast("iPhone 陀螺儀追蹤已授權並啟動！");
+              showToast("iPhone 陀螺儀動態立體追蹤已啟動！");
             } else {
-              showToast("未獲得 iPhone 陀螺儀存取權限。", true);
+              showToast("未獲得陀螺儀存取授權", true);
             }
           })
           .catch(err => {
@@ -362,7 +437,7 @@
         window.addEventListener('deviceorientation', onDeviceOrientation, true);
         gyroEnabled = true;
         gyroBtn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-        showToast("陀螺儀動態跟隨已啟動！");
+        showToast("陀螺儀追蹤已啟動！");
       } else {
         showToast("您的裝置不支援陀螺儀感測器。", true);
       }
@@ -398,17 +473,35 @@
 
     scaleSlider.addEventListener('input', updateModelScale);
     rotateSlider.addEventListener('input', updateModelRotation);
-    gyroBtn.addEventListener('click', enableGyroscope);
 
-    resetCamBtn.addEventListener('click', () => {
-      cameraAngleX = 0.2;
-      cameraAngleY = 0;
-      cameraDistance = 3.5;
-      updateCameraPosition();
-      showToast("已將視角鏡頭恢復預設位置");
+    heightSlider.addEventListener('input', () => {
+      floorY = parseFloat(heightSlider.value);
+      heightValue.textContent = `${floorY.toFixed(1)} 米`;
+      
+      groundGrid.position.y = floorY;
+      anchorWorldPosition.y = floorY;
+      targetObjectPivot.position.y = floorY;
+      visualReticleRing.position.y = floorY;
     });
 
-    // File Upload: MTL Material Loader
+    gyroBtn.addEventListener('click', enableGyroscope);
+
+    resetAnchorBtn.addEventListener('click', () => {
+      // Re-center 2.5 meters right in front of camera view
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      dir.y = 0; // Lock to horizontal floor
+      dir.normalize();
+
+      anchorWorldPosition.copy(camera.position).add(dir.multiplyScalar(2.5));
+      anchorWorldPosition.y = floorY;
+
+      targetObjectPivot.position.copy(anchorWorldPosition);
+      visualReticleRing.position.copy(anchorWorldPosition);
+
+      showToast("已重置錨點至正前方 2.5 米地面");
+    });
+
+    // MTL Loader
     mtlInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -420,16 +513,15 @@
           const mtlLoader = new THREE.MTLLoader();
           mtlMaterials = mtlLoader.parse(event.target.result);
           mtlMaterials.preload();
-          showToast(`材質檔 .MTL (${file.name}) 解析成功，請載入 .OBJ 檔`);
+          showToast(`材質檔 .MTL (${file.name}) 載入成功，請載入 .OBJ 檔`);
         } catch (err) {
-          console.error("MTL 解析失敗:", err);
           showToast(".MTL 檔案解析出錯", true);
         }
       };
       reader.readAsText(file);
     });
 
-    // File Upload: Texture Image Loader
+    // Texture Image Loader
     textureInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -439,7 +531,6 @@
         const textureLoader = new THREE.TextureLoader();
         customTexture = textureLoader.load(event.target.result, () => {
           showToast(`貼圖圖片 (${file.name}) 已載入`);
-          // Apply to existing loaded mesh if present
           if (loadedMesh) {
             loadedMesh.traverse((child) => {
               if (child.isMesh) {
@@ -453,7 +544,7 @@
       reader.readAsDataURL(file);
     });
 
-    // File Upload: OBJ Model Loader
+    // OBJ Loader
     objInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -463,11 +554,7 @@
       const reader = new FileReader();
       reader.onload = function (event) {
         try {
-          if (!THREE.OBJLoader) {
-            showToast("OBJLoader 尚未就緒，請重新載入頁面", true);
-            return;
-          }
-
+          if (!THREE.OBJLoader) return;
           const objLoader = new THREE.OBJLoader();
           
           if (mtlMaterials) {
@@ -476,7 +563,6 @@
 
           const parsedObj = objLoader.parse(event.target.result);
 
-          // Apply texture or fallback standard material if mesh has no material
           parsedObj.traverse((child) => {
             if (child.isMesh) {
               if (customTexture) {
@@ -492,7 +578,7 @@
             }
           });
 
-          // Normalize OBJ size
+          // Auto-scale model to fit ~1 meter
           const box = new THREE.Box3().setFromObject(parsedObj);
           const size = new THREE.Vector3();
           box.getSize(size);
@@ -506,8 +592,8 @@
           setModelMesh(parsedObj);
           showToast(`成功載入 .OBJ 檔案：${file.name}`);
         } catch (err) {
-          console.error("解析 OBJ 檔案失敗:", err);
-          showToast("OBJ 檔案解析失敗，請確認檔案內容格式", true);
+          console.error("OBJ 解析失敗:", err);
+          showToast("OBJ 檔案解析失敗，請確認檔案格式", true);
         }
       };
 
@@ -523,8 +609,8 @@
     function animate() {
       requestAnimationFrame(animate);
 
-      // Idle Rotation when default model is active
-      if (targetObjectPivot && (!objInput.files || !objInput.files.length) && !isPointerDown) {
+      // Gentle auto spin if using default cube
+      if (targetObjectPivot && (!objInput.files || !objInput.files.length) && !isDraggingView) {
         targetObjectPivot.rotation.y += 0.005;
         const deg = Math.round(THREE.MathUtils.radToDeg(targetObjectPivot.rotation.y) % 360);
         rotateSlider.value = deg < 0 ? deg + 360 : deg;
