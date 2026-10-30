@@ -1,714 +1,966 @@
-<!DOCTYPE html>
-<html lang="zh-HK">
+l<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>3D OBJ/MTL 模型 AR 空間投影工具</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Three.js Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- OBJLoader & MTLLoader -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/MTLLoader.js"></script>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #0f172a;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-    }
-    #video-background {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 1;
-    }
-    .simulated-bg {
-      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-    }
-    #canvas-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-      touch-action: none;
-    }
-    /* Dynamic AR Ring Marker */
-    .ar-reticle-marker {
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      border: 3px solid #38bdf8;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      z-index: 3;
-      box-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
-      animation: arPulse 1.2s ease-out infinite;
-    }
-    @keyframes arPulse {
-      0% { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
-      100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>即時降雨量監控系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom slider trackbar styling for light theme */
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            transition: background .15s ease-in-out, transform .1s ease-in-out;
+        }
+        .slider-thumb::-webkit-slider-thumb:hover {
+            background: #1d4ed8;
+            transform: scale(1.1);
+        }
+        /* Color selection pulsing effect */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .pulse-element {
+            animation: pulse-ring 2s infinite;
+        }
+    </style>
 </head>
-<body class="relative select-none">
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans flex flex-col">
 
-  <!-- Camera Feed Video Tag -->
-  <video id="video-background" autoplay playsinline webkit-playsinline muted class="hidden"></video>
-  
-  <!-- Fallback Background container -->
-  <div id="fallback-bg" class="simulated-bg"></div>
-
-  <!-- Three.js Canvas Container -->
-  <div id="canvas-container"></div>
-
-  <!-- Screen Tap Placement Reticle Overlay -->
-  <div id="ar-marker" class="ar-reticle-marker hidden"></div>
-
-  <!-- UI Controls Overlay -->
-  <div id="ui-overlay" class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 pb-8 transition-opacity duration-300">
-
-    <!-- Top Toolbar -->
-    <div id="top-toolbar" class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-slate-700/50 shadow-xl text-white">
-      <div class="flex items-center space-x-2">
-        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-        <span class="font-bold text-sm sm:text-base">3D AR 實境定位投影</span>
-      </div>
-
-      <!-- Upload & Toggle Actions -->
-      <div class="flex flex-wrap items-center gap-2">
-        <button id="gyro-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-          <span>iPhone 陀螺儀</span>
-        </button>
-
-        <label for="obj-input" class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-          <span>載入 .OBJ</span>
-        </label>
-        <input type="file" id="obj-input" accept=".obj" class="hidden" />
-
-        <label for="mtl-input" class="cursor-pointer bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium">
-          <span>.MTL (材質)</span>
-        </label>
-        <input type="file" id="mtl-input" accept=".mtl" class="hidden" />
-
-        <label for="texture-input" class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm px-2.5 py-2 rounded-xl border border-slate-600 transition flex items-center space-x-1 font-medium">
-          <span>貼圖 (可選)</span>
-        </label>
-        <input type="file" id="texture-input" accept="image/*" class="hidden" />
-
-        <!-- Hide UI Button inside Toolbar -->
-        <button id="hide-ui-btn" class="bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-600 text-xs sm:text-sm px-3 py-2 rounded-xl transition flex items-center space-x-1 font-medium shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.03 10.03 0 013.682-.813c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m-1.776 1.776l-9.9-9.9"/></svg>
-          <span>隱藏介面</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Status Toast Notification -->
-    <div id="status-toast" class="self-center bg-slate-800/90 text-slate-200 text-xs sm:text-sm px-4 py-2 rounded-full border border-slate-600 shadow-lg backdrop-blur-sm transition-opacity duration-300 pointer-events-auto text-center max-w-xs sm:max-w-md">
-      📍 點擊畫面任意位置即可將物件固定於現實空間錨點。
-    </div>
-
-    <!-- Bottom Controls Deck -->
-    <div id="bottom-deck" class="pointer-events-auto bg-slate-900/85 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 shadow-2xl text-white space-y-3 max-w-md w-full self-center max-h-[45vh] overflow-y-auto">
-      
-      <!-- Size Scale Slider -->
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <label for="scale-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
-            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-            物件尺寸 (Scale)
-          </label>
-          <span id="scale-value" class="text-xs font-mono text-blue-400">1.0x</span>
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-50 px-6 py-4 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                <i class="fa-solid fa-cloud-showers-heavy text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-slate-900">即時降雨量監控系統</h1>
+                <p class="text-xs text-slate-500">Real-time Rainfall Tracker</p>
+            </div>
         </div>
-        <input type="range" id="scale-slider" min="0.1" max="5" step="0.05" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-      </div>
-
-      <!-- Ground Depth Distance Slider -->
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <label for="height-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
-            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-8l-7 7-7-7"/></svg>
-            地面高度 (Floor Height)
-          </label>
-          <span id="height-value" class="text-xs font-mono text-purple-400">-1.2 米</span>
+        <div class="flex items-center gap-2">
+            <button onclick="toggleSettingsModal()" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-300 flex items-center gap-2 transition-all shadow-sm">
+                <i class="fa-solid fa-sliders text-blue-600"></i>
+                <span>預測參數設定</span>
+            </button>
+            <span id="statusBadge" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-slate-400 animate-pulse"></span> 待測量
+            </span>
         </div>
-        <input type="range" id="height-slider" min="-3" max="0" step="0.1" value="-1.2" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-      </div>
+    </header>
 
-      <!-- X Rotation Slider -->
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <label for="rotate-x-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
-            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
-            旋轉 X 軸 (前後傾斜)
-          </label>
-          <span id="rotate-x-value" class="text-xs font-mono text-rose-400">0°</span>
-        </div>
-        <input type="range" id="rotate-x-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-rose-500" />
-      </div>
-
-      <!-- Y Rotation Slider -->
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <label for="rotate-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
-            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            旋轉 Y 軸 (左右自轉)
-          </label>
-          <span id="rotate-value" class="text-xs font-mono text-emerald-400">0°</span>
-        </div>
-        <input type="range" id="rotate-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
-      </div>
-
-      <!-- Z Rotation Slider -->
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <label for="rotate-z-slider" class="text-xs sm:text-sm font-medium text-slate-300 flex items-center gap-1">
-            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            旋轉 Z 軸 (左右滾動)
-          </label>
-          <span id="rotate-z-value" class="text-xs font-mono text-amber-400">0°</span>
-        </div>
-        <input type="range" id="rotate-z-slider" min="0" max="360" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="flex justify-between items-center pt-1 border-t border-slate-700/60">
-        <button id="reset-anchor-btn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-600 transition">
-          重置至正前方地面
-        </button>
-        <span class="text-[10px] text-slate-400">點擊螢幕任意位置設定新 AR 錨點</span>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Floating Show UI Restore Button (Only visible when UI is hidden) -->
-  <button id="show-ui-btn" class="hidden absolute top-4 right-4 z-20 bg-slate-900/90 hover:bg-slate-800 text-amber-400 px-3.5 py-2 rounded-2xl border border-slate-700/80 shadow-2xl backdrop-blur-md transition flex items-center space-x-1.5 text-xs sm:text-sm font-semibold pointer-events-auto">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-    <span>顯示介面</span>
-  </button>
-
-  <script>
-    let scene, camera, renderer;
-    let targetObjectPivot = null;
-    let loadedMesh = null;
-    let groundGrid = null;
-    let visualReticleRing = null;
-    let mtlMaterials = null;
-    let customTexture = null;
-
-    // Spatial Anchoring
-    let floorY = -1.2;
-    let anchorWorldPosition = new THREE.Vector3(0, -1.2, -2.5);
-    const raycaster = new THREE.Raycaster();
-    const mouseVector = new THREE.Vector2();
-    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
-
-    // Camera Orbit/View Controls
-    let isDraggingView = false;
-    let previousPointerPosition = { x: 0, y: 0 };
-    let cameraPitch = 0; // Vertical angle
-    let cameraYaw = 0;   // Horizontal angle
-
-    // Gyroscope tracking variables
-    let gyroEnabled = false;
-    const zee = new THREE.Vector3(0, 0, 1);
-    const euler = new THREE.Euler();
-    const q0 = new THREE.Quaternion();
-    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
-
-    // UI Elements
-    const video = document.getElementById('video-background');
-    const fallbackBg = document.getElementById('fallback-bg');
-    const container = document.getElementById('canvas-container');
-    const arMarker = document.getElementById('ar-marker');
-    const objInput = document.getElementById('obj-input');
-    const mtlInput = document.getElementById('mtl-input');
-    const textureInput = document.getElementById('texture-input');
-    const scaleSlider = document.getElementById('scale-slider');
-    const scaleValue = document.getElementById('scale-value');
-    const heightSlider = document.getElementById('height-slider');
-    const heightValue = document.getElementById('height-value');
-    const rotateXSlider = document.getElementById('rotate-x-slider');
-    const rotateXValue = document.getElementById('rotate-x-value');
-    const rotateSlider = document.getElementById('rotate-slider');
-    const rotateValue = document.getElementById('rotate-value');
-    const rotateZSlider = document.getElementById('rotate-z-slider');
-    const rotateZValue = document.getElementById('rotate-z-value');
-    const statusToast = document.getElementById('status-toast');
-    const resetAnchorBtn = document.getElementById('reset-anchor-btn');
-    const gyroBtn = document.getElementById('gyro-btn');
-    
-    const uiOverlay = document.getElementById('ui-overlay');
-    const hideUiBtn = document.getElementById('hide-ui-btn');
-    const showUiBtn = document.getElementById('show-ui-btn');
-
-    // UI Toggle Visibility Handler
-    let isUiVisible = true;
-    function toggleUiVisibility(show) {
-      isUiVisible = show;
-      if (isUiVisible) {
-        uiOverlay.classList.remove('opacity-0', 'pointer-events-none');
-        showUiBtn.classList.add('hidden');
-      } else {
-        uiOverlay.classList.add('opacity-0', 'pointer-events-none');
-        showUiBtn.classList.remove('hidden');
-      }
-    }
-
-    hideUiBtn.addEventListener('click', () => toggleUiVisibility(false));
-    showUiBtn.addEventListener('click', () => toggleUiVisibility(true));
-
-    // Camera Feed Init tailored for iOS Safari / Mobile
-    async function initCamera() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        useFallbackEnvironment("iOS Safari 未開放相機權限，啟用 3D 模擬視角。");
-        return;
-      }
-      try {
-        const constraints = {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = stream;
+    <!-- Main Workspace -->
+    <main class="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        video.onloadedmetadata = () => {
-          video.play().catch(e => console.log("Video auto-play interrupted:", e));
-        };
+        <!-- Left Column: Video Frame & Calibration (7 cols) -->
+        <section class="lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- Video & Canvas Area -->
+            <div class="relative bg-black rounded-2xl overflow-hidden border border-slate-300 shadow-xl aspect-[4/3] flex items-center justify-center group">
+                <video id="webcam" autoplay playsinline muted class="hidden"></video>
+                <canvas id="outputCanvas" class="w-full h-full object-cover cursor-crosshair"></canvas>
+                
+                <!-- On-Screen Instructions overlay -->
+                <div id="setupInstruction" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-6 text-center transition-all duration-300 pointer-events-none">
+                    <div class="w-16 h-16 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 text-2xl mb-4 animate-bounce shadow-sm">
+                        <i class="fa-solid fa-cloud-rain"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-900 mb-2">啟動降雨量監控鏡頭</h3>
+                    <p class="text-sm text-slate-600 max-w-md mb-6">點擊下方「啟動相機」按鈕，對準浮標或雨量針以開始即時降雨量監控。</p>
+                    <button onclick="startCamera()" class="pointer-events-auto bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium px-5 py-2.5 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-camera"></i> 啟動相機
+                    </button>
+                </div>
 
-        video.classList.remove('hidden');
-        fallbackBg.classList.add('hidden');
-        showToast("相機已啟動！點擊畫面任意位置可設定 AR 物件錨點。");
-      } catch (err) {
-        console.warn("Camera init failed:", err);
-        useFallbackEnvironment("未獲得鏡頭權限或在沙盒環境，已自動切換至 3D 空間模式。");
-      }
-    }
+                <!-- Click to select hint -->
+                <div id="clickHint" class="absolute top-4 left-4 bg-white/95 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 flex items-center gap-2 shadow-md hidden">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping"></span>
+                    <span>請點擊畫面中的雨量標記以進行精確鎖定</span>
+                </div>
 
-    function useFallbackEnvironment(msg) {
-      video.classList.add('hidden');
-      fallbackBg.classList.remove('hidden');
-      showToast(msg);
-    }
+                <!-- Live Warning Overlay -->
+                <div id="warningOverlay" class="absolute inset-0 border-4 border-red-500 pointer-events-none opacity-0 transition-opacity duration-150 flex items-start justify-center pt-8">
+                    <div class="bg-red-600 text-white font-bold px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 animate-bounce">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span id="warningMessage">降雨量變化超出警戒範圍！</span>
+                    </div>
+                </div>
+            </div>
 
-    function initThree() {
-      scene = new THREE.Scene();
+            <!-- Fast Action Controls Under Canvas -->
+            <div class="grid grid-cols-4 gap-2.5">
+                <button id="btnSetBaseline" onclick="setBaseline()" disabled class="bg-blue-600/50 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 active:scale-95 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-blue-500/20 shadow-sm">
+                    <i class="fa-solid fa-ruler-vertical text-base"></i>
+                    <span class="text-[11px]">設為基準零點</span>
+                </button>
+                <button id="btnResetTrack" onclick="resetTracking()" class="bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-slate-200 shadow-sm">
+                    <i class="fa-solid fa-rotate text-base text-slate-600"></i>
+                    <span class="text-[11px]">重新鎖定</span>
+                </button>
+                <button id="btnToggleRoi" onclick="toggleRoiMode()" class="bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-slate-200 shadow-sm">
+                    <i id="roiIcon" class="fa-solid fa-vector-square text-base text-blue-600"></i>
+                    <span id="roiText" class="text-[11px]">ROI搜尋框: 120px</span>
+                </button>
+                <button id="btnSwitchCam" onclick="switchCamera()" class="bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-slate-200 shadow-sm">
+                    <i id="camIcon" class="fa-solid fa-camera-rotate text-base text-blue-600"></i>
+                    <span id="camText" class="text-[11px]">鏡頭: 前置</span>
+                </button>
+            </div>
 
-      // Camera positioned at head level (0, 0, 0)
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 0, 0);
+        </section>
 
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      container.appendChild(renderer.domElement);
+        <!-- Right Column: Control Panel & Diagnostics (5 cols) -->
+        <section class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Real-time Telemetry Card -->
+            <div class="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+                <h2 class="text-sm font-semibold tracking-wider text-slate-500 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-showers-heavy text-blue-600"></i> 即時降雨量指標
+                </h2>
+                
+                <!-- Simplified Rainfall Level Gauge Panel -->
+                <div class="bg-slate-50 rounded-xl p-5 border border-slate-200 flex flex-col justify-between relative overflow-hidden h-40">
+                    <span class="text-xs text-slate-500 font-medium">即時降雨強度狀態</span>
+                    
+                    <div class="flex items-baseline gap-2 mt-1 z-10">
+                        <span id="rainLevelStatus" class="text-4xl font-extrabold text-slate-800">無</span>
+                    </div>
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
-      scene.add(ambientLight);
+                    <div class="flex items-center gap-1.5 text-xs z-10 mt-2" id="directionIndicator">
+                        <i class="fa-solid fa-minus text-slate-400"></i>
+                        <span class="text-slate-500">尚未建立基準零點</span>
+                    </div>
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-      dirLight.position.set(5, 12, 7);
-      scene.add(dirLight);
+                    <!-- Background visual indicator -->
+                    <div class="absolute right-0 bottom-0 top-0 w-1/3 bg-slate-100/70 flex items-center justify-center border-l border-slate-200">
+                        <div class="relative w-4 h-28 bg-slate-200 rounded-full overflow-hidden flex flex-col justify-end">
+                            <div id="thermometerFill" class="w-full bg-blue-600 transition-all duration-100" style="height: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-      const backLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
-      backLight.position.set(-5, -5, -5);
-      scene.add(backLight);
+            <!-- Height History Graph -->
+            <div class="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-sm font-semibold tracking-wider text-slate-500 uppercase flex items-center gap-2">
+                        <i class="fa-solid fa-cloud-showers-water text-blue-600"></i> 降雨量變化趨勢
+                    </h2>
+                    <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+                        清除資料
+                    </button>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-2 border border-slate-200 aspect-[16/6] relative">
+                    <canvas id="historyChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
 
-      // Ground plane grid helper representing reality floor
-      groundGrid = new THREE.GridHelper(15, 30, 0x38bdf8, 0x475569);
-      groundGrid.position.set(0, floorY, 0);
-      scene.add(groundGrid);
+        </section>
 
-      // Visual Placement Reticle Ring on 3D Ground Plane
-      const ringGeo = new THREE.RingGeometry(0.3, 0.35, 32);
-      ringGeo.rotateX(-Math.PI / 2);
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide });
-      visualReticleRing = new THREE.Mesh(ringGeo, ringMat);
-      visualReticleRing.position.copy(anchorWorldPosition);
-      scene.add(visualReticleRing);
+    </main>
 
-      // Pivot Group for target 3D object
-      targetObjectPivot = new THREE.Group();
-      targetObjectPivot.position.copy(anchorWorldPosition);
-      scene.add(targetObjectPivot);
+    <!-- Advanced Parameters Modal Menu -->
+    <div id="settingsModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-200">
+        <div id="settingsModalContainer" class="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-5 transform scale-95 transition-all duration-200">
+            
+            <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
+                    <h2 class="text-base font-bold text-slate-900">降雨量監控進階調校</h2>
+                </div>
+                <button onclick="toggleSettingsModal()" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
 
-      createDefaultCube();
+            <div class="flex flex-col gap-5">
+                <!-- Color Matching Tolerance -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between items-center text-sm">
+                        <label for="tolerance" class="font-medium text-slate-700">色彩/HSV 追蹤容許度</label>
+                        <span id="toleranceVal" class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-blue-600 font-semibold border border-slate-200">35</span>
+                    </div>
+                    <input id="tolerance" type="range" min="5" max="100" value="35" oninput="updateTolerance(this.value)" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <p class="text-[11px] text-slate-500">調低數值可防止背景雜色干擾，調高則增加光影容錯度。</p>
+                </div>
 
-      // Gesture & Pointer Events
-      window.addEventListener('resize', onWindowResize);
-      container.addEventListener('pointerdown', onPointerDown);
-      container.addEventListener('pointermove', onPointerMove);
-      container.addEventListener('pointerup', onPointerUp);
+                <!-- ROI Search Window Box Size -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between items-center text-sm">
+                        <label for="roiSize" class="font-medium text-slate-700">ROI 區域搜尋框範圍</label>
+                        <span id="roiSizeVal" class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-blue-600 font-semibold border border-slate-200">120px</span>
+                    </div>
+                    <input id="roiSize" type="range" min="40" max="300" step="10" value="120" oninput="updateRoiSize(this.value)" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <p class="text-[11px] text-slate-500">限定影像檢測區域，避免畫面上其他相似顏色的物件干擾追蹤。</p>
+                </div>
 
-      animate();
-    }
+                <!-- Edge Detection Sensitivity -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between items-center text-sm">
+                        <label for="edgeWeight" class="font-medium text-slate-700">輪廓/邊緣檢測權重</label>
+                        <span id="edgeWeightVal" class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-blue-600 font-semibold border border-slate-200">40%</span>
+                    </div>
+                    <input id="edgeWeight" type="range" min="0" max="100" value="40" oninput="updateEdgeWeight(this.value)" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <p class="text-[11px] text-slate-500">混合 Sobel 輪廓邊緣特徵，降低單純背景雜色對追蹤的干擾。</p>
+                </div>
 
-    function createDefaultCube() {
-      const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-      const material = new THREE.MeshStandardMaterial({
-        color: 0x3b82f6,
-        roughness: 0.3,
-        metalness: 0.2
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      
-      const wireGeo = new THREE.BoxGeometry(0.62, 0.62, 0.62);
-      const wireMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, wireframe: true });
-      const wireMesh = new THREE.Mesh(wireGeo, wireMat);
-      
-      const group = new THREE.Group();
-      group.add(mesh);
-      group.add(wireMesh);
+                <!-- Minimum Blob Size -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between items-center text-sm">
+                        <label for="minArea" class="font-medium text-slate-700">最小標記像素面積</label>
+                        <span id="minAreaVal" class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-blue-600 font-semibold border border-slate-200">10</span>
+                    </div>
+                    <input id="minArea" type="range" min="1" max="500" value="10" oninput="updateMinArea(this.value)" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <p class="text-[11px] text-slate-500">設定標記最低相符像素數，有效過濾細微影像噪點與光影折射。</p>
+                </div>
 
-      setModelMesh(group);
-    }
+                <hr class="border-slate-200">
 
-    function setModelMesh(meshOrGroup) {
-      if (loadedMesh) {
-        targetObjectPivot.remove(loadedMesh);
-      }
+                <!-- Alert Threshold Settings -->
+                <div class="flex flex-col gap-3">
+                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">降雨量驟變與暴雨警戒設定</h3>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <div class="flex justify-between text-xs">
+                                <label for="riseThreshold" class="text-slate-700">豪雨驟升上限 (px)</label>
+                                <span id="riseVal" class="font-mono text-emerald-600 font-semibold">50</span>
+                            </div>
+                            <input id="riseThreshold" type="range" min="10" max="200" value="50" oninput="updateRiseThreshold(this.value)" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <div class="flex justify-between text-xs">
+                                <label for="dropThreshold" class="text-slate-700">降雨驟減下限 (px)</label>
+                                <span id="dropVal" class="font-mono text-rose-600 font-semibold">50</span>
+                            </div>
+                            <input id="dropThreshold" type="range" min="10" max="200" value="50" oninput="updateDropThreshold(this.value)" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-      loadedMesh = meshOrGroup;
+            <div class="mt-2 pt-3 border-t border-slate-200 flex justify-end">
+                <button onclick="toggleSettingsModal()" class="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium text-xs px-4 py-2 rounded-xl transition-all shadow-sm">
+                    套用設定
+                </button>
+            </div>
 
-      // Center geometry bounds at pivot center
-      const box = new THREE.Box3().setFromObject(loadedMesh);
-      const center = box.getCenter(new THREE.Vector3());
-      loadedMesh.position.sub(center);
+        </div>
+    </div>
 
-      // Raise slightly so bottom rests on anchor floor
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      loadedMesh.position.y += size.y / 2;
+    <!-- Custom Alert Notification Box -->
+    <div id="customNotification" class="fixed bottom-6 right-6 max-w-sm w-full bg-white border border-slate-200 p-4 rounded-xl shadow-xl flex items-start gap-3 transform translate-y-24 opacity-0 pointer-events-none transition-all duration-300 z-50">
+        <div id="notifIcon" class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+            <i class="fa-solid fa-circle-info"></i>
+        </div>
+        <div class="flex-1">
+            <h4 id="notifTitle" class="text-sm font-bold text-slate-800">系統通知</h4>
+            <p id="notifMessage" class="text-xs text-slate-500 mt-0.5 leading-relaxed">通知內容</p>
+        </div>
+        <button onclick="hideNotification()" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
 
-      targetObjectPivot.add(loadedMesh);
+    <!-- Technical Info Footer -->
+    <footer class="border-t border-slate-200 bg-white py-4 px-6 text-center text-xs text-slate-500 mt-auto">
+        <p>© 2026 即時降雨量監控系統 | 本地端高速影像視覺感測技術</p>
+    </footer>
 
-      updateModelScale();
-      updateModelRotation();
-    }
+    <!-- Core Video Processing Logic Script -->
+    <script>
+        // DOM Elements
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('outputCanvas');
+        const ctx = canvas.getContext('2d');
+        const setupInstruction = document.getElementById('setupInstruction');
+        const clickHint = document.getElementById('clickHint');
+        const statusBadge = document.getElementById('statusBadge');
+        const rainLevelStatus = document.getElementById('rainLevelStatus');
+        const directionIndicator = document.getElementById('directionIndicator');
+        const thermometerFill = document.getElementById('thermometerFill');
+        const btnSetBaseline = document.getElementById('btnSetBaseline');
+        const warningOverlay = document.getElementById('warningOverlay');
+        const warningMessage = document.getElementById('warningMessage');
 
-    // Handle Screen Tap to set 3D Ground Anchor Point
-    function onPointerDown(event) {
-      // Don't register taps on controls UI if UI is visible
-      if (isUiVisible && (event.clientY < 60 || event.clientY > window.innerHeight - 170)) return;
+        // Tracking & State Variables
+        let isCameraActive = false;
+        let animationFrameId = null;
+        let targetColor = null; // Object {r, g, b, h, s, v}
+        let lastPosition = null; // Last detected center {x, y} in canvas coordinate space
+        let baselineY = null;   // Reference Y coordinate of tracked object center
+        let currentY = null;    // Current tracked Y coordinate
+        let tolerance = 35;     // Threshold for color matching
+        let roiSize = 120;      // Bounding box size (pixels)
+        let useRoiMode = true;  // Restrict tracking inside ROI bounding box
+        let edgeWeight = 40;    // Percentage weight for Sobel edge detection (0-100%)
+        let minArea = 10;       // Minimum area (pixels) to consider
+        let riseThreshold = 50; // Pixels lower than baseline (higher Y) to trigger heavy rain warning
+        let dropThreshold = 50; // Pixels higher than baseline (lower Y) to trigger drop warning
+        let heightHistory = []; // Historical Y coordinates
+        const maxHistoryLength = 100;
 
-      isDraggingView = true;
-      previousPointerPosition = { x: event.clientX, y: event.clientY };
+        let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
+        let activeStream = null;
 
-      // Raycast from Screen Tap into 3D World Floor Plane
-      mouseVector.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouseVector.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        // Convert RGB to HSV for illumination-robust color tracking
+        function rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+            const d = max - min;
+            s = max === 0 ? 0 : d / max;
 
-      raycaster.setFromCamera(mouseVector, camera);
-      
-      // Update Ground Plane constant
-      groundPlane.constant = -floorY;
-      const hitPoint = new THREE.Vector3();
-
-      if (raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
-        anchorWorldPosition.copy(hitPoint);
-        
-        // Update 3D Object & Placement Ring Location
-        targetObjectPivot.position.copy(anchorWorldPosition);
-        visualReticleRing.position.copy(anchorWorldPosition);
-
-        // UI Pulse Marker Effect
-        triggerMarkerPulse(event.clientX, event.clientY);
-        showToast(`📍 已將 AR 錨點定位至 (${hitPoint.x.toFixed(1)}, ${hitPoint.z.toFixed(1)})`);
-      }
-    }
-
-    function onPointerMove(event) {
-      if (!isDraggingView) return;
-
-      // If Gyroscope is disabled, allow touch drag to look around spatial scene
-      if (!gyroEnabled) {
-        const deltaX = event.clientX - previousPointerPosition.x;
-        const deltaY = event.clientY - previousPointerPosition.y;
-
-        cameraYaw -= deltaX * 0.005;
-        cameraPitch -= deltaY * 0.005;
-        cameraPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraPitch));
-
-        camera.rotation.set(cameraPitch, cameraYaw, 0, 'YXZ');
-      }
-
-      previousPointerPosition = { x: event.clientX, y: event.clientY };
-    }
-
-    function onPointerUp() {
-      isDraggingView = false;
-    }
-
-    function triggerMarkerPulse(x, y) {
-      arMarker.style.left = `${x}px`;
-      arMarker.style.top = `${y}px`;
-      arMarker.classList.remove('hidden');
-
-      setTimeout(() => {
-        arMarker.classList.add('hidden');
-      }, 1200);
-    }
-
-    // Gyroscope tracking for iPhone / Mobile AR
-    function enableGyroscope() {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(permissionState => {
-            if (permissionState === 'granted') {
-              window.addEventListener('deviceorientation', onDeviceOrientation, true);
-              gyroEnabled = true;
-              gyroBtn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-              showToast("iPhone 陀螺儀動態立體追蹤已啟動！");
+            if (max === min) {
+                h = 0; // achromatic
             } else {
-              showToast("未獲得陀螺儀存取授權", true);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
             }
-          })
-          .catch(err => {
-            console.error(err);
-            showToast("無法觸發 iPhone 陀螺儀請求", true);
-          });
-      } else if ('DeviceOrientationEvent' in window) {
-        window.addEventListener('deviceorientation', onDeviceOrientation, true);
-        gyroEnabled = true;
-        gyroBtn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-        showToast("陀螺儀追蹤已啟動！");
-      } else {
-        showToast("您的裝置不支援陀螺儀感測器。", true);
-      }
-    }
-
-    function onDeviceOrientation(event) {
-      if (!gyroEnabled || event.alpha === null) return;
-
-      const alpha = THREE.MathUtils.degToRad(event.alpha || 0);
-      const beta = THREE.MathUtils.degToRad(event.beta || 0);
-      const gamma = THREE.MathUtils.degToRad(event.gamma || 0);
-      const orient = THREE.MathUtils.degToRad(window.orientation || 0);
-
-      euler.set(beta, alpha, -gamma, 'YXZ');
-      camera.quaternion.setFromEuler(euler);
-      camera.quaternion.multiply(q1);
-      camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
-    }
-
-    function updateModelScale() {
-      if (!targetObjectPivot) return;
-      const val = parseFloat(scaleSlider.value);
-      targetObjectPivot.scale.set(val, val, val);
-      scaleValue.textContent = `${val.toFixed(2)}x`;
-    }
-
-    function updateModelRotation() {
-      if (!targetObjectPivot) return;
-      const degX = parseFloat(rotateXSlider.value);
-      const degY = parseFloat(rotateSlider.value);
-      const degZ = parseFloat(rotateZSlider.value);
-
-      targetObjectPivot.rotation.x = THREE.MathUtils.degToRad(degX);
-      targetObjectPivot.rotation.y = THREE.MathUtils.degToRad(degY);
-      targetObjectPivot.rotation.z = THREE.MathUtils.degToRad(degZ);
-
-      rotateXValue.textContent = `${degX}°`;
-      rotateValue.textContent = `${degY}°`;
-      rotateZValue.textContent = `${degZ}°`;
-    }
-
-    scaleSlider.addEventListener('input', updateModelScale);
-    rotateXSlider.addEventListener('input', updateModelRotation);
-    rotateSlider.addEventListener('input', updateModelRotation);
-    rotateZSlider.addEventListener('input', updateModelRotation);
-
-    heightSlider.addEventListener('input', () => {
-      floorY = parseFloat(heightSlider.value);
-      heightValue.textContent = `${floorY.toFixed(1)} 米`;
-      
-      groundGrid.position.y = floorY;
-      anchorWorldPosition.y = floorY;
-      targetObjectPivot.position.y = floorY;
-      visualReticleRing.position.y = floorY;
-    });
-
-    gyroBtn.addEventListener('click', enableGyroscope);
-
-    resetAnchorBtn.addEventListener('click', () => {
-      // Re-center 2.5 meters right in front of camera view
-      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-      dir.y = 0; // Lock to horizontal floor
-      dir.normalize();
-
-      anchorWorldPosition.copy(camera.position).add(dir.multiplyScalar(2.5));
-      anchorWorldPosition.y = floorY;
-
-      targetObjectPivot.position.copy(anchorWorldPosition);
-      visualReticleRing.position.copy(anchorWorldPosition);
-
-      showToast("已重置錨點至正前方 2.5 米地面");
-    });
-
-    // MTL Loader
-    mtlInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        try {
-          if (!THREE.MTLLoader) return;
-          const mtlLoader = new THREE.MTLLoader();
-          mtlMaterials = mtlLoader.parse(event.target.result);
-          mtlMaterials.preload();
-          showToast(`材質檔 .MTL (${file.name}) 載入成功，請載入 .OBJ 檔`);
-        } catch (err) {
-          showToast(".MTL 檔案解析出錯", true);
+            return { h: h * 360, s: s * 100, v: v * 100 };
         }
-      };
-      reader.readAsText(file);
-    });
 
-    // Texture Image Loader
-    textureInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+        // Settings Modal Controller
+        function toggleSettingsModal() {
+            const modal = document.getElementById('settingsModal');
+            const container = document.getElementById('settingsModalContainer');
+            const isHidden = modal.classList.contains('pointer-events-none');
 
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        const textureLoader = new THREE.TextureLoader();
-        customTexture = textureLoader.load(event.target.result, () => {
-          showToast(`貼圖圖片 (${file.name}) 已載入`);
-          if (loadedMesh) {
-            loadedMesh.traverse((child) => {
-              if (child.isMesh) {
-                child.material.map = customTexture;
-                child.material.needsUpdate = true;
-              }
-            });
-          }
-        });
-      };
-      reader.readAsDataURL(file);
-    });
+            if (isHidden) {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                container.classList.remove('scale-95');
+                container.classList.add('scale-100');
+            } else {
+                modal.classList.add('opacity-0', 'pointer-events-none');
+                container.classList.add('scale-95');
+                container.classList.remove('scale-100');
+            }
+        }
 
-    // OBJ Loader
-    objInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+        // Custom Notification Controller
+        function showNotification(title, message, type = 'info') {
+            const notif = document.getElementById('customNotification');
+            const notifTitle = document.getElementById('notifTitle');
+            const notifMessage = document.getElementById('notifMessage');
+            const notifIcon = document.getElementById('notifIcon');
 
-      showToast("正在解析 3D OBJ 模型...", false);
+            notifTitle.innerText = title;
+            notifMessage.innerText = message;
 
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        try {
-          if (!THREE.OBJLoader) return;
-          const objLoader = new THREE.OBJLoader();
-          
-          if (mtlMaterials) {
-            objLoader.setMaterials(mtlMaterials);
-          }
+            if (type === 'success') {
+                notifIcon.className = "w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0";
+                notifIcon.innerHTML = `<i class="fa-solid fa-circle-check"></i>`;
+            } else if (type === 'warning') {
+                notifIcon.className = "w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0";
+                notifIcon.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i>`;
+            } else if (type === 'danger') {
+                notifIcon.className = "w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0";
+                notifIcon.innerHTML = `<i class="fa-solid fa-circle-xmark"></i>`;
+            } else {
+                notifIcon.className = "w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0";
+                notifIcon.innerHTML = `<i class="fa-solid fa-circle-info"></i>`;
+            }
 
-          const parsedObj = objLoader.parse(event.target.result);
+            notif.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+            
+            clearTimeout(window.notifTimeout);
+            window.notifTimeout = setTimeout(hideNotification, 4000);
+        }
 
-          parsedObj.traverse((child) => {
-            if (child.isMesh) {
-              if (customTexture) {
-                child.material.map = customTexture;
-              }
-              if (!child.material) {
-                child.material = new THREE.MeshStandardMaterial({
-                  color: 0x94a3b8,
-                  roughness: 0.5,
-                  metalness: 0.1
+        function hideNotification() {
+            const notif = document.getElementById('customNotification');
+            notif.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+        }
+
+        // Start Camera Connection
+        async function startCamera() {
+            if (activeStream) {
+                activeStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, facingMode: currentFacingMode },
+                    audio: false
                 });
-              }
+                
+                activeStream = stream;
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    setupInstruction.classList.add('opacity-0', 'pointer-events-none');
+                    clickHint.classList.remove('hidden');
+                    isCameraActive = true;
+                    
+                    canvas.width = 640;
+                    canvas.height = 480;
+                    
+                    startProcessing();
+                    showNotification("鏡頭已啟動", `即時降雨量監控系統已連結 ${currentFacingMode === 'user' ? '前置' : '後置'} 視訊裝置`, "success");
+                };
+            } catch (err) {
+                console.error("相機權限遭拒或無法啟動: ", err);
+                showNotification("相機啟動失敗", "無法連線至視訊鏡頭，請確認裝置與瀏覽器授權權限。", "danger");
             }
-          });
-
-          // Auto-scale model to fit ~1 meter
-          const box = new THREE.Box3().setFromObject(parsedObj);
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z);
-
-          if (maxDim > 0) {
-            const autoScale = 1.0 / maxDim;
-            parsedObj.scale.set(autoScale, autoScale, autoScale);
-          }
-
-          setModelMesh(parsedObj);
-          showToast(`成功載入 .OBJ 檔案：${file.name}`);
-        } catch (err) {
-          console.error("OBJ 解析失敗:", err);
-          showToast("OBJ 檔案解析失敗，請確認檔案格式", true);
         }
-      };
 
-      reader.readAsText(file);
-    });
+        // Switch Camera
+        async function switchCamera() {
+            currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+            
+            const camIcon = document.getElementById('camIcon');
+            const camText = document.getElementById('camText');
+            
+            if (currentFacingMode === 'user') {
+                camIcon.className = "fa-solid fa-camera-rotate text-base text-blue-600";
+                camText.innerText = "鏡頭: 前置";
+            } else {
+                camIcon.className = "fa-solid fa-camera-rotate text-base text-emerald-600";
+                camText.innerText = "鏡頭: 後置";
+            }
 
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+            if (isCameraActive) {
+                await startCamera();
+            } else {
+                showNotification("鏡頭設定變更", `已選擇${currentFacingMode === 'user' ? '前置' : '後置'}鏡頭。`, "info");
+            }
+        }
 
-    function animate() {
-      requestAnimationFrame(animate);
+        function toggleRoiMode() {
+            useRoiMode = !useRoiMode;
+            const roiIcon = document.getElementById('roiIcon');
+            const roiText = document.getElementById('roiText');
+            
+            if (useRoiMode) {
+                roiIcon.className = "fa-solid fa-vector-square text-base text-blue-600";
+                roiText.innerText = `ROI搜尋框: ${roiSize}px`;
+                showNotification("ROI 模式切換", "已開啟局域 ROI 搜尋鎖定模式", "info");
+            } else {
+                roiIcon.className = "fa-solid fa-expand text-base text-slate-400";
+                roiText.innerText = "全畫面檢測";
+                showNotification("ROI 模式切換", "已切換為全畫面影像搜尋", "info");
+            }
+        }
 
-      // Gentle auto spin if using default cube
-      if (targetObjectPivot && (!objInput.files || !objInput.files.length) && !isDraggingView) {
-        targetObjectPivot.rotation.y += 0.005;
-        const deg = Math.round(THREE.MathUtils.radToDeg(targetObjectPivot.rotation.y) % 360);
-        rotateSlider.value = deg < 0 ? deg + 360 : deg;
-        rotateValue.textContent = `${rotateSlider.value}°`;
-      }
+        // Frame Processing Loop
+        function startProcessing() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            tick();
+        }
 
-      renderer.render(scene, camera);
-    }
+        function tick() {
+            if (!isCameraActive) return;
 
-    let toastTimeout;
-    function showToast(message, isError = false) {
-      statusToast.textContent = message;
-      statusToast.className = `self-center text-xs sm:text-sm px-4 py-2 rounded-full border shadow-lg backdrop-blur-sm transition-opacity duration-300 pointer-events-auto text-center max-w-xs sm:max-w-md ${
-        isError ? 'bg-red-900/90 text-red-200 border-red-700' : 'bg-slate-800/90 text-slate-200 border-slate-600'
-      }`;
-      
-      clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => {
-        statusToast.style.opacity = '0.7';
-      }, 4000);
-      statusToast.style.opacity = '1';
-    }
+            // Draw video frame according to facing mode
+            ctx.save();
+            if (currentFacingMode === 'user') {
+                // Mirror front camera horizontally
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
 
-    window.onload = () => {
-      initThree();
-      initCamera();
-    };
-  </script>
+            if (targetColor) {
+                trackTargetObject();
+            } else {
+                drawTargetingOverlay();
+            }
+
+            drawHistoryChart();
+
+            animationFrameId = requestAnimationFrame(tick);
+        }
+
+        // Targeting HUD overlay
+        function drawTargetingOverlay() {
+            ctx.strokeStyle = 'rgba(37, 99, 235, 0.6)';
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 40, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(37, 99, 235, 0.8)';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2 - 60, canvas.height / 2);
+            ctx.lineTo(canvas.width / 2 + 60, canvas.height / 2);
+            ctx.moveTo(canvas.width / 2, canvas.height / 2 - 60);
+            ctx.lineTo(canvas.width / 2, canvas.height / 2 + 60);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.font = 'bold 15px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('請點擊畫面的雨量計或標記以鎖定預測標的', canvas.width / 2, canvas.height / 2 + 80);
+        }
+
+        // Hybrid Engine: Combined HSV Color & Sobel Contour Edge Tracking with Localized Spatial ROI
+        function trackTargetObject() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+
+            // Compute search boundaries in display canvas space
+            let startX = 2, endX = width - 2;
+            let startY = 2, endY = height - 2;
+
+            if (useRoiMode && lastPosition) {
+                const halfRoi = Math.round(roiSize / 2);
+                startX = Math.max(2, Math.round(lastPosition.x - halfRoi));
+                endX = Math.min(width - 2, Math.round(lastPosition.x + halfRoi));
+                startY = Math.max(2, Math.round(lastPosition.y - halfRoi));
+                endY = Math.min(height - 2, Math.round(lastPosition.y + halfRoi));
+            }
+
+            // 1. Grayscale Buffer for Sobel Edge Detection
+            const gray = new Uint8Array(width * height);
+            for (let i = 0; i < data.length; i += 4) {
+                gray[i / 4] = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+            }
+
+            let sumX = 0;
+            let sumY = 0;
+            let totalWeight = 0;
+            let matchedCount = 0;
+
+            const step = 2; // Step size for real-time performance
+            const edgeWeightRatio = edgeWeight / 100;
+            const colorWeightRatio = 1 - edgeWeightRatio;
+
+            for (let y = startY; y < endY; y += step) {
+                for (let x = startX; x < endX; x += step) {
+                    const idx = (y * width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+
+                    // Improved HSV & Color Distance Calculation
+                    const pixelHsv = rgbToHsv(r, g, b);
+                    let hDiff = Math.abs(pixelHsv.h - targetColor.h);
+                    if (hDiff > 180) hDiff = 360 - hDiff;
+
+                    const rDiff = r - targetColor.r;
+                    const gDiff = g - targetColor.g;
+                    const bDiff = b - targetColor.b;
+                    const rgbDist = Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+
+                    // Refined Match Condition with Hue & Saturation Isolation
+                    const isColorMatch = (rgbDist < tolerance) || 
+                                         (hDiff < (tolerance / 2.5) && pixelHsv.s > 12 && targetColor.s > 12);
+
+                    if (isColorMatch) {
+                        // 2. Sobel Edge Gradient Magnitude Computation around pixel
+                        const gIdx = y * width + x;
+                        const gx = -gray[gIdx - width - 1] + gray[gIdx - width + 1]
+                                  - 2 * gray[gIdx - 1] + 2 * gray[gIdx + 1]
+                                  - gray[gIdx + width - 1] + gray[gIdx + width + 1];
+
+                        const gy = -gray[gIdx - width - 1] - 2 * gray[gIdx - width] - gray[gIdx - width + 1]
+                                  + gray[gIdx + width - 1] + 2 * gray[gIdx + width] + gray[gIdx + width + 1];
+
+                        const edgeMagnitude = Math.min(255, Math.sqrt(gx * gx + gy * gy));
+
+                        // 3. Hybrid Weighting (Color Match + Edge Intensity)
+                        const colorMatchScore = Math.max(0, 1 - (rgbDist / tolerance));
+                        const edgeScore = edgeMagnitude / 255;
+                        const combinedScore = (colorMatchScore * colorWeightRatio) + (edgeScore * edgeWeightRatio);
+
+                        if (combinedScore > 0.18) {
+                            // Spatial Centroid Weighting
+                            let spatialKernel = 1.0;
+                            if (lastPosition) {
+                                const distToCenter = Math.hypot(x - lastPosition.x, y - lastPosition.y);
+                                spatialKernel = Math.exp(-Math.pow(distToCenter / (roiSize / 2), 2));
+                            }
+                            const finalScore = combinedScore * spatialKernel;
+
+                            sumX += x * finalScore;
+                            sumY += y * finalScore;
+                            totalWeight += finalScore;
+                            matchedCount++;
+
+                            // Highlight tracked edges & color contours in green
+                            data[idx] = Math.min(255, r * 0.2);
+                            data[idx + 1] = Math.min(255, g * 1.6 + 60);
+                            data[idx + 2] = Math.min(255, b * 0.2);
+                        }
+                    }
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+
+            // Render ROI bounding box outline directly in display canvas space
+            if (useRoiMode && lastPosition) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+                ctx.restore();
+            }
+
+            if (matchedCount >= minArea && totalWeight > 0) {
+                const canvasCenterX = sumX / totalWeight;
+                const canvasCenterY = sumY / totalWeight;
+
+                // Exponential moving average for smooth tracker overlay
+                if (lastPosition) {
+                    lastPosition.x = lastPosition.x * 0.3 + canvasCenterX * 0.7;
+                    lastPosition.y = lastPosition.y * 0.3 + canvasCenterY * 0.7;
+                } else {
+                    lastPosition = { x: canvasCenterX, y: canvasCenterY };
+                }
+
+                currentY = Math.round(lastPosition.y);
+
+                updateStatusBadge(true);
+
+                drawObjectTracker(lastPosition.x, lastPosition.y, matchedCount);
+
+                if (baselineY !== null) {
+                    // Lower object position in image (larger Y value) represents HIGHER rainfall intensity (going down = higher rain)
+                    const delta = Math.round(currentY - baselineY);
+                    
+                    evaluateHeightThresholds(delta);
+
+                    heightHistory.push(delta);
+                    if (heightHistory.length > maxHistoryLength) {
+                        heightHistory.shift();
+                    }
+                } else {
+                    rainLevelStatus.innerText = "無";
+                    rainLevelStatus.className = "text-4xl font-extrabold text-slate-800";
+                    directionIndicator.innerHTML = `<i class="fa-solid fa-droplet text-blue-600"></i> <span class="text-slate-600">請設定基準零點以啟動預測</span>`;
+                    thermometerFill.style.height = "0%";
+                }
+            } else {
+                updateStatusBadge(false);
+                
+                directionIndicator.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500 animate-ping"></i> <span class="text-amber-600">標記遺失，展開全畫面搜尋中...</span>`;
+
+                // Expand ROI if missing target
+                if (useRoiMode) {
+                    lastPosition = null; 
+                }
+
+                if (baselineY !== null && heightHistory.length > 0) {
+                    heightHistory.push(heightHistory[heightHistory.length - 1]);
+                    if (heightHistory.length > maxHistoryLength) {
+                        heightHistory.shift();
+                    }
+                }
+            }
+        }
+
+        // Draw Tracker HUD directly in Canvas coordinates
+        function drawObjectTracker(cx, cy, totalPixels) {
+            ctx.save();
+
+            const rectSize = Math.max(14, Math.sqrt(totalPixels) * 1.6);
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = 2.5;
+            ctx.strokeRect(cx - rectSize / 2, cy - rectSize / 2, rectSize, rectSize);
+
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - 15, cy);
+            ctx.lineTo(cx + 15, cy);
+            ctx.moveTo(cx, cy - 15);
+            ctx.lineTo(cx, cy + 15);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`標記座標: (${Math.round(cx)}, ${Math.round(cy)})`, cx + rectSize/2 + 5, cy - 10);
+            ctx.fillText(`輪廓面積: ${totalPixels} px`, cx + rectSize/2 + 5, cy + 5);
+
+            ctx.restore();
+        }
+
+        // Mouse click target picker - Samples directly from rendered canvas to match displayed pixels correctly
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isCameraActive) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            let canvasX = (clickX / rect.width) * canvas.width;
+            let canvasY = (clickY / rect.height) * canvas.height;
+
+            canvasX = Math.max(0, Math.min(canvas.width - 1, canvasX));
+            canvasY = Math.max(0, Math.min(canvas.height - 1, canvasY));
+
+            // Sample a 3x3 local pixel region directly from the rendered canvas display frame
+            let rAvg = 0, gAvg = 0, bAvg = 0, count = 0;
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    const px = Math.min(canvas.width - 1, Math.max(0, Math.floor(canvasX + dx)));
+                    const py = Math.min(canvas.height - 1, Math.max(0, Math.floor(canvasY + dy)));
+                    const pixel = ctx.getImageData(px, py, 1, 1).data;
+                    rAvg += pixel[0]; gAvg += pixel[1]; bAvg += pixel[2];
+                    count++;
+                }
+            }
+            rAvg = Math.round(rAvg / count);
+            gAvg = Math.round(gAvg / count);
+            bAvg = Math.round(bAvg / count);
+
+            const hsv = rgbToHsv(rAvg, gAvg, bAvg);
+            
+            targetColor = {
+                r: rAvg,
+                g: gAvg,
+                b: bAvg,
+                h: hsv.h,
+                s: hsv.s,
+                v: hsv.v
+            };
+
+            lastPosition = { x: canvasX, y: canvasY };
+
+            btnSetBaseline.removeAttribute('disabled');
+            btnSetBaseline.classList.remove('bg-blue-600/50');
+            btnSetBaseline.classList.add('bg-blue-600');
+
+            setBaseline();
+            
+            clickHint.classList.add('hidden');
+            showNotification("精準標記鎖定", `採樣均值色彩 HSV (${Math.round(hsv.h)}°, ${Math.round(hsv.s)}%) 已儲存`, "success");
+        });
+
+        function setBaseline() {
+            if (currentY !== null) {
+                baselineY = currentY;
+                heightHistory = [];
+                showNotification("基準零點已建立", "零點參考位置已儲存", "success");
+            } else {
+                showNotification("建立失敗", "無法計算基準位置。請確保點選了清晰標記。", "warning");
+            }
+        }
+
+        function resetTracking() {
+            targetColor = null;
+            lastPosition = null;
+            baselineY = null;
+            currentY = null;
+            heightHistory = [];
+            
+            rainLevelStatus.innerText = "無";
+            rainLevelStatus.className = "text-4xl font-extrabold text-slate-800";
+            
+            btnSetBaseline.setAttribute('disabled', 'true');
+            btnSetBaseline.classList.remove('bg-blue-600');
+            btnSetBaseline.classList.add('bg-blue-600/50');
+
+            clickHint.classList.remove('hidden');
+            warningOverlay.classList.add('opacity-0');
+            statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400 animate-pulse"></span> 待測量`;
+            directionIndicator.innerHTML = `<i class="fa-solid fa-minus text-slate-400"></i> <span class="text-slate-500">尚未建立基準零點</span>`;
+            thermometerFill.style.height = "0%";
+            
+            showNotification("預測參數重置", "請點擊雨量計標記重新進行鎖定。", "info");
+        }
+
+        function updateTolerance(val) {
+            tolerance = parseInt(val);
+            document.getElementById('toleranceVal').innerText = val;
+        }
+
+        function updateRoiSize(val) {
+            roiSize = parseInt(val);
+            document.getElementById('roiSizeVal').innerText = val + "px";
+            document.getElementById('roiText').innerText = `ROI搜尋框: ${val}px`;
+        }
+
+        function updateEdgeWeight(val) {
+            edgeWeight = parseInt(val);
+            document.getElementById('edgeWeightVal').innerText = val + "%";
+        }
+
+        function updateMinArea(val) {
+            minArea = parseInt(val);
+            document.getElementById('minAreaVal').innerText = val;
+        }
+
+        function updateRiseThreshold(val) {
+            riseThreshold = parseInt(val);
+            document.getElementById('riseVal').innerText = val;
+        }
+
+        function updateDropThreshold(val) {
+            dropThreshold = parseInt(val);
+            document.getElementById('dropVal').innerText = val;
+        }
+
+        // Helper function to update status badge display
+        function updateStatusBadge(isTracking) {
+            if (isTracking) {
+                statusBadge.className = "px-3 py-1.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm";
+                statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 追蹤中`;
+            } else {
+                statusBadge.className = "px-3 py-1.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 shadow-sm";
+                statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> 尋找標記中`;
+            }
+        }
+
+        // Helper function to calculate rainfall level and update visual indicators based on Y displacement delta
+        function evaluateHeightThresholds(delta) {
+            // Fill gauge calculation (0% to 100%)
+            const maxRange = Math.max(riseThreshold, dropThreshold, 100);
+            const fillPercentage = Math.min(100, Math.max(0, ((delta + maxRange) / (maxRange * 2)) * 100));
+            thermometerFill.style.height = `${fillPercentage}%`;
+
+            // Categorize rainfall intensity based on delta (positive delta = target lower in frame = higher rainfall)
+            let rainStatusText = "無";
+            let rainStatusClass = "text-4xl font-extrabold text-slate-800";
+            let directionHTML = "";
+
+            if (delta > riseThreshold) {
+                rainStatusText = "豪雨 / 暴雨";
+                rainStatusClass = "text-4xl font-extrabold text-rose-600";
+                directionHTML = `<i class="fa-solid fa-cloud-showers-heavy text-rose-600"></i> <span class="text-rose-600 font-semibold">降雨量劇增 (+${delta}px)</span>`;
+                
+                warningMessage.innerText = `警戒：降雨量暴增 (+${delta}px)！`;
+                warningOverlay.classList.remove('opacity-0');
+            } else if (delta > 20) {
+                rainStatusText = "大雨";
+                rainStatusClass = "text-4xl font-extrabold text-blue-600";
+                directionHTML = `<i class="fa-solid fa-cloud-rain text-blue-600"></i> <span class="text-blue-600 font-medium">降雨量上升 (+${delta}px)</span>`;
+                warningOverlay.classList.add('opacity-0');
+            } else if (delta > 5) {
+                rainStatusText = "小雨";
+                rainStatusClass = "text-4xl font-extrabold text-sky-500";
+                directionHTML = `<i class="fa-solid fa-cloud-sun-rain text-sky-500"></i> <span class="text-sky-600">微幅上升 (+${delta}px)</span>`;
+                warningOverlay.classList.add('opacity-0');
+            } else if (delta < -dropThreshold) {
+                rainStatusText = "雨勢驟減";
+                rainStatusClass = "text-4xl font-extrabold text-amber-600";
+                directionHTML = `<i class="fa-solid fa-arrow-down text-amber-600"></i> <span class="text-amber-600 font-semibold">降雨量驟降 (${delta}px)</span>`;
+                
+                warningMessage.innerText = `警戒：降雨量驟降 (${delta}px)！`;
+                warningOverlay.classList.remove('opacity-0');
+            } else {
+                rainStatusText = "微量 / 無雨";
+                rainStatusClass = "text-4xl font-extrabold text-slate-700";
+                directionHTML = `<i class="fa-solid fa-minus text-slate-400"></i> <span class="text-slate-500">降雨量穩定 (${delta >= 0 ? '+' : ''}${delta}px)</span>`;
+                warningOverlay.classList.add('opacity-0');
+            }
+
+            rainLevelStatus.innerText = rainStatusText;
+            rainLevelStatus.className = rainStatusClass;
+            directionIndicator.innerHTML = directionHTML;
+        }
+
+        // History Chart Engine
+        const chartCanvas = document.getElementById('historyChart');
+        const chartCtx = chartCanvas.getContext('2d');
+
+        function resizeChartCanvas() {
+            const rect = chartCanvas.parentNode.getBoundingClientRect();
+            chartCanvas.width = rect.width;
+            chartCanvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeChartCanvas);
+        resizeChartCanvas();
+
+        function clearHistory() {
+            heightHistory = [];
+            showNotification("歷史紀錄已清除", "降雨趨勢圖表已重置", "info");
+        }
+
+        function drawHistoryChart() {
+            const w = chartCanvas.width;
+            const h = chartCanvas.height;
+            chartCtx.clearRect(0, 0, w, h);
+
+            chartCtx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
+            chartCtx.lineWidth = 1;
+
+            const zeroY = h / 2;
+            chartCtx.beginPath();
+            chartCtx.moveTo(0, zeroY);
+            chartCtx.lineTo(w, zeroY);
+            chartCtx.stroke();
+
+            const maxDeltaToShow = 150;
+            const scaleFactor = (h / 2) / maxDeltaToShow;
+
+            chartCtx.fillStyle = '#64748b';
+            chartCtx.font = '10px monospace';
+            chartCtx.fillText("基準 0", 10, zeroY - 4);
+
+            if (heightHistory.length === 0) {
+                chartCtx.fillStyle = '#94a3b8';
+                chartCtx.font = '12px sans-serif';
+                chartCtx.textAlign = 'center';
+                chartCtx.fillText("暫無降雨位移紀錄 (請先設定基準零點)", w / 2, h / 2 + 5);
+                chartCtx.textAlign = 'left';
+                return;
+            }
+
+            chartCtx.beginPath();
+            chartCtx.lineWidth = 2.5;
+            
+            const segmentWidth = w / (maxHistoryLength - 1);
+
+            for (let i = 0; i < heightHistory.length; i++) {
+                const delta = heightHistory[i];
+                const x = i * segmentWidth;
+                // Positive delta (higher rainfall) renders above baseline (lower canvas Y)
+                const y = zeroY - (delta * scaleFactor);
+
+                if (i === 0) {
+                    chartCtx.moveTo(x, y);
+                } else {
+                    chartCtx.lineTo(x, y);
+                }
+            }
+
+            const gradient = chartCtx.createLinearGradient(0, 0, 0, h);
+            gradient.addColorStop(0, '#dc2626');
+            gradient.addColorStop(0.3, '#2563eb');
+            gradient.addColorStop(0.7, '#2563eb');
+            gradient.addColorStop(1, '#dc2626');
+
+            chartCtx.strokeStyle = gradient;
+            chartCtx.stroke();
+
+            chartCtx.lineTo((heightHistory.length - 1) * segmentWidth, zeroY);
+            chartCtx.lineTo(0, zeroY);
+            chartCtx.closePath();
+            chartCtx.fillStyle = 'rgba(37, 99, 235, 0.1)';
+            chartCtx.fill();
+        }
+
+    </script>
 </body>
 </html>
