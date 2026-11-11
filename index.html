@@ -3,7 +3,7 @@ l<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>即時降雨量監控系統</title>
+    <title>即時水位高度監控系統</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome for Icons -->
@@ -45,7 +45,7 @@ l<!DOCTYPE html>
                 <i class="fa-solid fa-cloud-showers-heavy text-lg"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold tracking-tight text-slate-900">即時降雨量監控系統</h1>
+                <h1 class="text-lg font-bold tracking-tight text-slate-900">即時水位高度監控系統</h1>
                 <p class="text-xs text-slate-500">Real-time Rainfall Tracker</p>
             </div>
         </div>
@@ -76,8 +76,8 @@ l<!DOCTYPE html>
                     <div class="w-16 h-16 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 text-2xl mb-4 animate-bounce shadow-sm">
                         <i class="fa-solid fa-cloud-rain"></i>
                     </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-2">啟動降雨量監控鏡頭</h3>
-                    <p class="text-sm text-slate-600 max-w-md mb-6">點擊下方「啟動相機」按鈕，對準浮標或雨量針以開始即時降雨量監控。</p>
+                    <h3 class="text-lg font-bold text-slate-900 mb-2">啟動水位高度監控鏡頭</h3>
+                    <p class="text-sm text-slate-600 max-w-md mb-6">點擊下方「啟動相機」按鈕，對準浮標或雨量針以開始即時水位高度監控。</p>
                     <button onclick="startCamera()" class="pointer-events-auto bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium px-5 py-2.5 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-2">
                         <i class="fa-solid fa-camera"></i> 啟動相機
                     </button>
@@ -93,24 +93,16 @@ l<!DOCTYPE html>
                 <div id="warningOverlay" class="absolute inset-0 border-4 border-red-500 pointer-events-none opacity-0 transition-opacity duration-150 flex items-start justify-center pt-8">
                     <div class="bg-red-600 text-white font-bold px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 animate-bounce">
                         <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span id="warningMessage">降雨量變化超出警戒範圍！</span>
+                        <span id="warningMessage">水位高度變化超出警戒範圍！</span>
                     </div>
                 </div>
             </div>
 
             <!-- Fast Action Controls Under Canvas -->
-            <div class="grid grid-cols-4 gap-2.5">
-                <button id="btnSetBaseline" onclick="setBaseline()" disabled class="bg-blue-600/50 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 active:scale-95 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-blue-500/20 shadow-sm">
-                    <i class="fa-solid fa-ruler-vertical text-base"></i>
-                    <span class="text-[11px]">設為基準零點</span>
-                </button>
+            <div class="grid grid-cols-2 gap-3">
                 <button id="btnResetTrack" onclick="resetTracking()" class="bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-slate-200 shadow-sm">
                     <i class="fa-solid fa-rotate text-base text-slate-600"></i>
                     <span class="text-[11px]">重新鎖定</span>
-                </button>
-                <button id="btnToggleRoi" onclick="toggleRoiMode()" class="bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-slate-200 shadow-sm">
-                    <i id="roiIcon" class="fa-solid fa-vector-square text-base text-blue-600"></i>
-                    <span id="roiText" class="text-[11px]">ROI搜尋框: 120px</span>
                 </button>
                 <button id="btnSwitchCam" onclick="switchCamera()" class="bg-white hover:bg-slate-100 active:scale-95 text-slate-700 font-semibold py-2.5 px-3 rounded-xl transition-all flex flex-col items-center justify-center gap-1 border border-slate-200 shadow-sm">
                     <i id="camIcon" class="fa-solid fa-camera-rotate text-base text-blue-600"></i>
@@ -126,20 +118,20 @@ l<!DOCTYPE html>
             <!-- Real-time Telemetry Card -->
             <div class="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
                 <h2 class="text-sm font-semibold tracking-wider text-slate-500 uppercase flex items-center gap-2">
-                    <i class="fa-solid fa-cloud-showers-heavy text-blue-600"></i> 即時降雨量指標
+                    <i class="fa-solid fa-ruler-vertical text-blue-600"></i> 水位高度
                 </h2>
                 
-                <!-- Simplified Rainfall Level Gauge Panel -->
+                <!-- Water Level Height Gauge Panel -->
                 <div class="bg-slate-50 rounded-xl p-5 border border-slate-200 flex flex-col justify-between relative overflow-hidden h-40">
-                    <span class="text-xs text-slate-500 font-medium">即時降雨強度狀態</span>
+                    <span class="text-xs text-slate-500 font-medium">當前畫面物體水位高度 (1.00 - 100.00)</span>
                     
                     <div class="flex items-baseline gap-2 mt-1 z-10">
-                        <span id="rainLevelStatus" class="text-4xl font-extrabold text-slate-800">無</span>
+                        <span id="waterLevelValue" class="text-4xl font-extrabold text-slate-800">--.--</span>
                     </div>
 
                     <div class="flex items-center gap-1.5 text-xs z-10 mt-2" id="directionIndicator">
                         <i class="fa-solid fa-minus text-slate-400"></i>
-                        <span class="text-slate-500">尚未建立基準零點</span>
+                        <span class="text-slate-500">等待鎖定目標標記...</span>
                     </div>
 
                     <!-- Background visual indicator -->
@@ -155,7 +147,7 @@ l<!DOCTYPE html>
             <div class="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 flex flex-col gap-3">
                 <div class="flex justify-between items-center">
                     <h2 class="text-sm font-semibold tracking-wider text-slate-500 uppercase flex items-center gap-2">
-                        <i class="fa-solid fa-cloud-showers-water text-blue-600"></i> 降雨量變化趨勢
+                        <i class="fa-solid fa-chart-line text-blue-600"></i> 水位高度變化
                     </h2>
                     <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">
                         清除資料
@@ -179,7 +171,7 @@ l<!DOCTYPE html>
                     <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
                         <i class="fa-solid fa-sliders"></i>
                     </div>
-                    <h2 class="text-base font-bold text-slate-900">降雨量監控進階調校</h2>
+                    <h2 class="text-base font-bold text-slate-900">水位高度監控進階調校</h2>
                 </div>
                 <button onclick="toggleSettingsModal()" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors">
                     <i class="fa-solid fa-xmark"></i>
@@ -197,11 +189,20 @@ l<!DOCTYPE html>
                     <p class="text-[11px] text-slate-500">調低數值可防止背景雜色干擾，調高則增加光影容錯度。</p>
                 </div>
 
-                <!-- ROI Search Window Box Size -->
-                <div class="flex flex-col gap-2">
+                <!-- ROI Toggle & Search Window Box Size -->
+                <div class="flex flex-col gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     <div class="flex justify-between items-center text-sm">
-                        <label for="roiSize" class="font-medium text-slate-700">ROI 區域搜尋框範圍</label>
-                        <span id="roiSizeVal" class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-blue-600 font-semibold border border-slate-200">120px</span>
+                        <div class="flex items-center gap-2">
+                            <label for="roiToggle" class="font-medium text-slate-700">啟用 ROI 區域搜尋框</label>
+                        </div>
+                        <button id="roiToggleBtn" onclick="toggleRoiMode()" class="px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow-sm transition-all flex items-center gap-1.5">
+                            <i id="roiToggleIcon" class="fa-solid fa-toggle-on text-sm"></i>
+                            <span id="roiToggleText">已開啟</span>
+                        </button>
+                    </div>
+                    <div class="flex justify-between items-center text-sm mt-1">
+                        <label for="roiSize" class="text-xs font-medium text-slate-600">ROI 區域搜尋框範圍</label>
+                        <span id="roiSizeVal" class="font-mono text-xs bg-white px-2 py-0.5 rounded text-blue-600 font-semibold border border-slate-200">120px</span>
                     </div>
                     <input id="roiSize" type="range" min="40" max="300" step="10" value="120" oninput="updateRoiSize(this.value)" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
                     <p class="text-[11px] text-slate-500">限定影像檢測區域，避免畫面上其他相似顏色的物件干擾追蹤。</p>
@@ -231,7 +232,7 @@ l<!DOCTYPE html>
 
                 <!-- Alert Threshold Settings -->
                 <div class="flex flex-col gap-3">
-                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">降雨量驟變與暴雨警戒設定</h3>
+                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">水位高度驟變與暴雨警戒設定</h3>
                     
                     <div class="grid grid-cols-2 gap-4">
                         <div class="flex flex-col gap-1.5">
@@ -277,7 +278,7 @@ l<!DOCTYPE html>
 
     <!-- Technical Info Footer -->
     <footer class="border-t border-slate-200 bg-white py-4 px-6 text-center text-xs text-slate-500 mt-auto">
-        <p>© 2026 即時降雨量監控系統 | 本地端高速影像視覺感測技術</p>
+        <p>© 2026 即時水位高度監控系統 | 本地端高速影像視覺感測技術</p>
     </footer>
 
     <!-- Core Video Processing Logic Script -->
@@ -289,7 +290,7 @@ l<!DOCTYPE html>
         const setupInstruction = document.getElementById('setupInstruction');
         const clickHint = document.getElementById('clickHint');
         const statusBadge = document.getElementById('statusBadge');
-        const rainLevelStatus = document.getElementById('rainLevelStatus');
+        const waterLevelValue = document.getElementById('waterLevelValue');
         const directionIndicator = document.getElementById('directionIndicator');
         const thermometerFill = document.getElementById('thermometerFill');
         const btnSetBaseline = document.getElementById('btnSetBaseline');
@@ -301,16 +302,15 @@ l<!DOCTYPE html>
         let animationFrameId = null;
         let targetColor = null; // Object {r, g, b, h, s, v}
         let lastPosition = null; // Last detected center {x, y} in canvas coordinate space
-        let baselineY = null;   // Reference Y coordinate of tracked object center
         let currentY = null;    // Current tracked Y coordinate
         let tolerance = 35;     // Threshold for color matching
         let roiSize = 120;      // Bounding box size (pixels)
         let useRoiMode = true;  // Restrict tracking inside ROI bounding box
         let edgeWeight = 40;    // Percentage weight for Sobel edge detection (0-100%)
         let minArea = 10;       // Minimum area (pixels) to consider
-        let riseThreshold = 50; // Pixels lower than baseline (higher Y) to trigger heavy rain warning
-        let dropThreshold = 50; // Pixels higher than baseline (lower Y) to trigger drop warning
-        let heightHistory = []; // Historical Y coordinates
+        let riseThreshold = 50; // Pixels lower than baseline (higher Y) to trigger warning
+        let dropThreshold = 50; // Pixels higher than baseline (lower Y) to trigger warning
+        let heightHistory = []; // Historical normalized water level height values (1.00 - 100.00)
         const maxHistoryLength = 100;
 
         let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
@@ -413,7 +413,7 @@ l<!DOCTYPE html>
                     canvas.height = 480;
                     
                     startProcessing();
-                    showNotification("鏡頭已啟動", `即時降雨量監控系統已連結 ${currentFacingMode === 'user' ? '前置' : '後置'} 視訊裝置`, "success");
+                    showNotification("鏡頭已啟動", `即時水位高度監控系統已連結 ${currentFacingMode === 'user' ? '前置' : '後置'} 視訊裝置`, "success");
                 };
             } catch (err) {
                 console.error("相機權限遭拒或無法啟動: ", err);
@@ -445,16 +445,19 @@ l<!DOCTYPE html>
 
         function toggleRoiMode() {
             useRoiMode = !useRoiMode;
-            const roiIcon = document.getElementById('roiIcon');
-            const roiText = document.getElementById('roiText');
+            const roiToggleBtn = document.getElementById('roiToggleBtn');
+            const roiToggleIcon = document.getElementById('roiToggleIcon');
+            const roiToggleText = document.getElementById('roiToggleText');
             
             if (useRoiMode) {
-                roiIcon.className = "fa-solid fa-vector-square text-base text-blue-600";
-                roiText.innerText = `ROI搜尋框: ${roiSize}px`;
+                roiToggleBtn.className = "px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow-sm transition-all flex items-center gap-1.5";
+                roiToggleIcon.className = "fa-solid fa-toggle-on text-sm";
+                roiToggleText.innerText = "已開啟";
                 showNotification("ROI 模式切換", "已開啟局域 ROI 搜尋鎖定模式", "info");
             } else {
-                roiIcon.className = "fa-solid fa-expand text-base text-slate-400";
-                roiText.innerText = "全畫面檢測";
+                roiToggleBtn.className = "px-3 py-1 text-xs font-semibold rounded-lg bg-slate-200 text-slate-700 border border-slate-300 shadow-sm transition-all flex items-center gap-1.5";
+                roiToggleIcon.className = "fa-solid fa-toggle-off text-sm text-slate-500";
+                roiToggleText.innerText = "已關閉";
                 showNotification("ROI 模式切換", "已切換為全畫面影像搜尋", "info");
             }
         }
@@ -643,25 +646,22 @@ l<!DOCTYPE html>
 
                 drawObjectTracker(lastPosition.x, lastPosition.y, matchedCount);
 
-                if (baselineY !== null) {
-                    // Lower object position in image (larger Y value) represents HIGHER rainfall intensity (going down = higher rain)
-                    const delta = Math.round(currentY - baselineY);
-                    
-                    evaluateHeightThresholds(delta);
+                // Calculate normalized water level height from 1.00 (bottom) to 100.00 (top)
+                const normalizedHeight = Math.max(1, Math.min(100, ((canvas.height - currentY) / canvas.height) * 99 + 1));
+                const formattedHeight = normalizedHeight.toFixed(2);
 
-                    heightHistory.push(delta);
-                    if (heightHistory.length > maxHistoryLength) {
-                        heightHistory.shift();
-                    }
-                } else {
-                    rainLevelStatus.innerText = "無";
-                    rainLevelStatus.className = "text-4xl font-extrabold text-slate-800";
-                    directionIndicator.innerHTML = `<i class="fa-solid fa-droplet text-blue-600"></i> <span class="text-slate-600">請設定基準零點以啟動預測</span>`;
-                    thermometerFill.style.height = "0%";
+                waterLevelValue.innerText = formattedHeight;
+                thermometerFill.style.height = `${normalizedHeight}%`;
+
+                directionIndicator.innerHTML = `<i class="fa-solid fa-check-circle text-emerald-600"></i> <span class="text-slate-600">即時監控中 (高度: ${formattedHeight})</span>`;
+
+                heightHistory.push(normalizedHeight);
+                if (heightHistory.length > maxHistoryLength) {
+                    heightHistory.shift();
                 }
             } else {
                 updateStatusBadge(false);
-                
+                waterLevelValue.innerText = "--.--";
                 directionIndicator.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500 animate-ping"></i> <span class="text-amber-600">標記遺失，展開全畫面搜尋中...</span>`;
 
                 // Expand ROI if missing target
@@ -669,7 +669,7 @@ l<!DOCTYPE html>
                     lastPosition = null; 
                 }
 
-                if (baselineY !== null && heightHistory.length > 0) {
+                if (heightHistory.length > 0) {
                     heightHistory.push(heightHistory[heightHistory.length - 1]);
                     if (heightHistory.length > maxHistoryLength) {
                         heightHistory.shift();
@@ -746,48 +746,26 @@ l<!DOCTYPE html>
             };
 
             lastPosition = { x: canvasX, y: canvasY };
-
-            btnSetBaseline.removeAttribute('disabled');
-            btnSetBaseline.classList.remove('bg-blue-600/50');
-            btnSetBaseline.classList.add('bg-blue-600');
-
-            setBaseline();
             
             clickHint.classList.add('hidden');
             showNotification("精準標記鎖定", `採樣均值色彩 HSV (${Math.round(hsv.h)}°, ${Math.round(hsv.s)}%) 已儲存`, "success");
         });
 
-        function setBaseline() {
-            if (currentY !== null) {
-                baselineY = currentY;
-                heightHistory = [];
-                showNotification("基準零點已建立", "零點參考位置已儲存", "success");
-            } else {
-                showNotification("建立失敗", "無法計算基準位置。請確保點選了清晰標記。", "warning");
-            }
-        }
-
         function resetTracking() {
             targetColor = null;
             lastPosition = null;
-            baselineY = null;
             currentY = null;
             heightHistory = [];
             
-            rainLevelStatus.innerText = "無";
-            rainLevelStatus.className = "text-4xl font-extrabold text-slate-800";
-            
-            btnSetBaseline.setAttribute('disabled', 'true');
-            btnSetBaseline.classList.remove('bg-blue-600');
-            btnSetBaseline.classList.add('bg-blue-600/50');
+            waterLevelValue.innerText = "--.--";
 
             clickHint.classList.remove('hidden');
             warningOverlay.classList.add('opacity-0');
             statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400 animate-pulse"></span> 待測量`;
-            directionIndicator.innerHTML = `<i class="fa-solid fa-minus text-slate-400"></i> <span class="text-slate-500">尚未建立基準零點</span>`;
+            directionIndicator.innerHTML = `<i class="fa-solid fa-minus text-slate-400"></i> <span class="text-slate-500">等待鎖定目標標記...</span>`;
             thermometerFill.style.height = "0%";
             
-            showNotification("預測參數重置", "請點擊雨量計標記重新進行鎖定。", "info");
+            showNotification("預測參數重置", "請點擊標記重新進行鎖定。", "info");
         }
 
         function updateTolerance(val) {
@@ -798,7 +776,6 @@ l<!DOCTYPE html>
         function updateRoiSize(val) {
             roiSize = parseInt(val);
             document.getElementById('roiSizeVal').innerText = val + "px";
-            document.getElementById('roiText').innerText = `ROI搜尋框: ${val}px`;
         }
 
         function updateEdgeWeight(val) {
@@ -832,111 +809,95 @@ l<!DOCTYPE html>
             }
         }
 
-        // Helper function to calculate rainfall level and update visual indicators based on Y displacement delta
+        // Helper function to calculate displacement status and update warnings
         function evaluateHeightThresholds(delta) {
-            // Fill gauge calculation (0% to 100%)
-            const maxRange = Math.max(riseThreshold, dropThreshold, 100);
-            const fillPercentage = Math.min(100, Math.max(0, ((delta + maxRange) / (maxRange * 2)) * 100));
-            thermometerFill.style.height = `${fillPercentage}%`;
-
-            // Categorize rainfall intensity based on delta (positive delta = target lower in frame = higher rainfall)
-            let rainStatusText = "無";
-            let rainStatusClass = "text-4xl font-extrabold text-slate-800";
             let directionHTML = "";
 
             if (delta > riseThreshold) {
-                rainStatusText = "豪雨 / 暴雨";
-                rainStatusClass = "text-4xl font-extrabold text-rose-600";
-                directionHTML = `<i class="fa-solid fa-cloud-showers-heavy text-rose-600"></i> <span class="text-rose-600 font-semibold">降雨量劇增 (+${delta}px)</span>`;
-                
-                warningMessage.innerText = `警戒：降雨量暴增 (+${delta}px)！`;
+                directionHTML = `<i class="fa-solid fa-arrow-up text-rose-600"></i> <span class="text-rose-600 font-semibold">水位上升超標 (+${delta}px)</span>`;
+                warningMessage.innerText = `警戒：水位上升超標 (+${delta}px)！`;
                 warningOverlay.classList.remove('opacity-0');
-            } else if (delta > 20) {
-                rainStatusText = "大雨";
-                rainStatusClass = "text-4xl font-extrabold text-blue-600";
-                directionHTML = `<i class="fa-solid fa-cloud-rain text-blue-600"></i> <span class="text-blue-600 font-medium">降雨量上升 (+${delta}px)</span>`;
-                warningOverlay.classList.add('opacity-0');
-            } else if (delta > 5) {
-                rainStatusText = "小雨";
-                rainStatusClass = "text-4xl font-extrabold text-sky-500";
-                directionHTML = `<i class="fa-solid fa-cloud-sun-rain text-sky-500"></i> <span class="text-sky-600">微幅上升 (+${delta}px)</span>`;
-                warningOverlay.classList.add('opacity-0');
             } else if (delta < -dropThreshold) {
-                rainStatusText = "雨勢驟減";
-                rainStatusClass = "text-4xl font-extrabold text-amber-600";
-                directionHTML = `<i class="fa-solid fa-arrow-down text-amber-600"></i> <span class="text-amber-600 font-semibold">降雨量驟降 (${delta}px)</span>`;
-                
-                warningMessage.innerText = `警戒：降雨量驟降 (${delta}px)！`;
+                directionHTML = `<i class="fa-solid fa-arrow-down text-amber-600"></i> <span class="text-amber-600 font-semibold">水位下降超標 (${delta}px)</span>`;
+                warningMessage.innerText = `警戒：水位下降超標 (${delta}px)！`;
                 warningOverlay.classList.remove('opacity-0');
             } else {
-                rainStatusText = "微量 / 無雨";
-                rainStatusClass = "text-4xl font-extrabold text-slate-700";
-                directionHTML = `<i class="fa-solid fa-minus text-slate-400"></i> <span class="text-slate-500">降雨量穩定 (${delta >= 0 ? '+' : ''}${delta}px)</span>`;
+                directionHTML = `<i class="fa-solid fa-equals text-slate-400"></i> <span class="text-slate-600">水位穩定 (${delta >= 0 ? '+' : ''}${delta}px)</span>`;
                 warningOverlay.classList.add('opacity-0');
             }
 
-            rainLevelStatus.innerText = rainStatusText;
-            rainLevelStatus.className = rainStatusClass;
             directionIndicator.innerHTML = directionHTML;
         }
 
-        // History Chart Engine
-        const chartCanvas = document.getElementById('historyChart');
-        const chartCtx = chartCanvas.getContext('2d');
+        // History Chart Engine & Safe Initialization Guards
+        function getChartCanvas() {
+            return document.getElementById('historyChart');
+        }
 
         function resizeChartCanvas() {
+            const chartCanvas = getChartCanvas();
+            if (!chartCanvas || !chartCanvas.parentNode) return;
             const rect = chartCanvas.parentNode.getBoundingClientRect();
             chartCanvas.width = rect.width;
             chartCanvas.height = rect.height;
         }
         window.addEventListener('resize', resizeChartCanvas);
-        resizeChartCanvas();
 
         function clearHistory() {
             heightHistory = [];
-            showNotification("歷史紀錄已清除", "降雨趨勢圖表已重置", "info");
+            showNotification("歷史紀錄已清除", "水位高度變化圖表已重置", "info");
         }
 
         function drawHistoryChart() {
+            const chartCanvas = getChartCanvas();
+            if (!chartCanvas) return;
+            
+            const chartCtx = chartCanvas.getContext('2d');
+            if (!chartCtx) return;
+
             const w = chartCanvas.width;
             const h = chartCanvas.height;
+            if (w === 0 || h === 0) {
+                resizeChartCanvas();
+            }
+
             chartCtx.clearRect(0, 0, w, h);
 
-            chartCtx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
+            // Draw Grid Lines (25, 50, 75 markers)
+            chartCtx.strokeStyle = 'rgba(203, 213, 225, 0.5)';
             chartCtx.lineWidth = 1;
 
-            const zeroY = h / 2;
-            chartCtx.beginPath();
-            chartCtx.moveTo(0, zeroY);
-            chartCtx.lineTo(w, zeroY);
-            chartCtx.stroke();
+            [25, 50, 75].forEach(level => {
+                const y = h - (level / 100) * h;
+                chartCtx.beginPath();
+                chartCtx.moveTo(0, y);
+                chartCtx.lineTo(w, y);
+                chartCtx.stroke();
 
-            const maxDeltaToShow = 150;
-            const scaleFactor = (h / 2) / maxDeltaToShow;
-
-            chartCtx.fillStyle = '#64748b';
-            chartCtx.font = '10px monospace';
-            chartCtx.fillText("基準 0", 10, zeroY - 4);
+                chartCtx.fillStyle = '#94a3b8';
+                chartCtx.font = '10px monospace';
+                chartCtx.fillText(`${level}.00`, 10, y - 3);
+            });
 
             if (heightHistory.length === 0) {
                 chartCtx.fillStyle = '#94a3b8';
                 chartCtx.font = '12px sans-serif';
                 chartCtx.textAlign = 'center';
-                chartCtx.fillText("暫無降雨位移紀錄 (請先設定基準零點)", w / 2, h / 2 + 5);
+                chartCtx.fillText("暫無水位高度紀錄 (請先點擊目標開啟追蹤)", w / 2, h / 2 + 5);
                 chartCtx.textAlign = 'left';
                 return;
             }
 
+            // Draw Height Trend Line (Scale 1.00 - 100.00 to Canvas Height)
             chartCtx.beginPath();
             chartCtx.lineWidth = 2.5;
             
             const segmentWidth = w / (maxHistoryLength - 1);
 
             for (let i = 0; i < heightHistory.length; i++) {
-                const delta = heightHistory[i];
+                const val = heightHistory[i];
                 const x = i * segmentWidth;
-                // Positive delta (higher rainfall) renders above baseline (lower canvas Y)
-                const y = zeroY - (delta * scaleFactor);
+                const y = h - ((val - 1) / 99) * h; // Map 1-100 to canvas height
 
                 if (i === 0) {
                     chartCtx.moveTo(x, y);
@@ -946,20 +907,24 @@ l<!DOCTYPE html>
             }
 
             const gradient = chartCtx.createLinearGradient(0, 0, 0, h);
-            gradient.addColorStop(0, '#dc2626');
-            gradient.addColorStop(0.3, '#2563eb');
-            gradient.addColorStop(0.7, '#2563eb');
-            gradient.addColorStop(1, '#dc2626');
+            gradient.addColorStop(0, '#2563eb');
+            gradient.addColorStop(1, '#0284c7');
 
             chartCtx.strokeStyle = gradient;
             chartCtx.stroke();
 
-            chartCtx.lineTo((heightHistory.length - 1) * segmentWidth, zeroY);
-            chartCtx.lineTo(0, zeroY);
+            // Fill area underneath chart curve
+            chartCtx.lineTo((heightHistory.length - 1) * segmentWidth, h);
+            chartCtx.lineTo(0, h);
             chartCtx.closePath();
-            chartCtx.fillStyle = 'rgba(37, 99, 235, 0.1)';
+            chartCtx.fillStyle = 'rgba(37, 99, 235, 0.08)';
             chartCtx.fill();
         }
+
+        // Initialize canvas dimensions once DOM content is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            resizeChartCanvas();
+        });
 
     </script>
 </body>
